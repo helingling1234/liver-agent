@@ -1,43 +1,50 @@
-"""Main agent loop for the liver disease diagnosis and treatment agent."""
+"""Main agent loop — powered by Groq (Llama 3.3 70B)."""
 
 from __future__ import annotations
 import json
-import sys
+import os
 from typing import Any
 
-import anthropic
+from groq import Groq
 
 from tools import TOOLS, execute_tool
-from prompts import get_system_prompt
+from prompts import PHYSICIAN_SYSTEM_PROMPT, PATIENT_SYSTEM_PROMPT
 
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4096
+MODEL = "llama-3.3-70b-versatile"
+
+# Convert Anthropic-style tool definitions → OpenAI/Groq format
+def _to_groq_tools(tools: list[dict]) -> list[dict]:
+    result = []
+    for t in tools:
+        result.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        })
+    return result
+
+GROQ_TOOLS = _to_groq_tools(TOOLS)
 
 
 class LiverAgent:
-    """Agentic loop for liver disease clinical decision support."""
+    """Agentic loop for liver disease clinical decision support via Groq."""
 
     def __init__(self, mode: str = "physician", verbose: bool = False):
-        self.client = anthropic.Anthropic()
+        self.client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
         self.mode = mode
         self.verbose = verbose
         self.conversation: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
-        self.cache_read_tokens = 0
-        self.cache_creation_tokens = 0
 
-    def _system_prompt(self) -> list[dict]:
-        return get_system_prompt(self.mode)
+    def _system_content(self) -> str:
+        return PHYSICIAN_SYSTEM_PROMPT if self.mode == "physician" else PATIENT_SYSTEM_PROMPT
 
     def _build_messages(self) -> list[dict]:
-        return self.conversation.copy()
-
-    def _record_usage(self, usage: Any) -> None:
-        self.total_input_tokens += getattr(usage, "input_tokens", 0)
-        self.total_output_tokens += getattr(usage, "output_tokens", 0)
-        self.cache_read_tokens += getattr(usage, "cache_read_input_tokens", 0) or 0
-        self.cache_creation_tokens += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        return [{"role": "system", "content": self._system_content()}] + self.conversation
 
     def run_turn(
         self,
@@ -46,98 +53,86 @@ class LiverAgent:
         on_tool_start: Any = None,
         on_tool_end: Any = None,
     ) -> str:
-        """Run a single conversation turn, handling the agentic tool-use loop.
-
-        Returns the final assistant text response.
-        """
         self.conversation.append({"role": "user", "content": user_message})
 
         final_text = ""
         iterations = 0
-        max_iterations = 10  # safety cap
 
-        while iterations < max_iterations:
+        while iterations < 10:
             iterations += 1
 
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=self._system_prompt(),
-                tools=TOOLS,
+                max_tokens=4096,
                 messages=self._build_messages(),
-                thinking={"type": "disabled"},  # keep responses fast on Sonnet
+                tools=GROQ_TOOLS,
+                tool_choice="auto",
             )
 
-            self._record_usage(response.usage)
+            msg = response.choices[0].message
+            usage = response.usage
+            if usage:
+                self.total_input_tokens += usage.prompt_tokens or 0
+                self.total_output_tokens += usage.completion_tokens or 0
 
             if self.verbose:
-                print(f"[DEBUG] Stop reason: {response.stop_reason}, "
-                      f"Input tokens: {response.usage.input_tokens}, "
-                      f"Output tokens: {response.usage.output_tokens}, "
-                      f"Cache read: {getattr(response.usage, 'cache_read_input_tokens', 0)}, "
-                      f"Cache write: {getattr(response.usage, 'cache_creation_input_tokens', 0)}",
-                      file=sys.stderr)
+                import sys
+                print(f"[DEBUG] finish_reason={response.choices[0].finish_reason} "
+                      f"in={usage.prompt_tokens if usage else '?'} "
+                      f"out={usage.completion_tokens if usage else '?'}", file=sys.stderr)
 
-            # Collect text and tool use blocks
-            text_blocks = []
-            tool_use_blocks = []
-            for block in response.content:
-                if block.type == "text":
-                    text_blocks.append(block.text)
-                elif block.type == "tool_use":
-                    tool_use_blocks.append(block)
-
-            # Emit any text content
-            for txt in text_blocks:
-                final_text += txt
+            # Emit text
+            if msg.content:
+                final_text += msg.content
                 if on_text:
-                    on_text(txt)
+                    on_text(msg.content)
 
-            # Append assistant message to history
+            # Append assistant turn
             self.conversation.append({
                 "role": "assistant",
-                "content": response.content,
+                "content": msg.content or "",
+                **({"tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in msg.tool_calls
+                ]} if msg.tool_calls else {}),
             })
 
-            # If no tool calls, we're done
-            if response.stop_reason == "end_turn" or not tool_use_blocks:
+            # No tool calls → done
+            if not msg.tool_calls or response.choices[0].finish_reason == "stop":
                 break
 
-            # Execute all tool calls
-            tool_results = []
-            for tool_block in tool_use_blocks:
-                tool_name = tool_block.name
-                tool_input = tool_block.input
+            # Execute tools
+            for tc in msg.tool_calls:
+                tool_name = tc.function.name
+                try:
+                    tool_input = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    tool_input = {}
 
                 if on_tool_start:
                     on_tool_start(tool_name, tool_input)
 
                 result = execute_tool(tool_name, tool_input)
-                result_str = json.dumps(result, indent=2, default=str)
 
                 if on_tool_end:
                     on_tool_end(tool_name, result)
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_block.id,
-                    "content": result_str,
+                self.conversation.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(result, default=str),
                 })
-
-            # Send tool results back
-            self.conversation.append({
-                "role": "user",
-                "content": tool_results,
-            })
 
         return final_text
 
     def chat(self, message: str) -> str:
-        """Convenience method: run a turn and return the response."""
         return self.run_turn(message)
 
     def reset(self) -> None:
-        """Clear conversation history."""
         self.conversation = []
 
     @property
@@ -145,6 +140,6 @@ class LiverAgent:
         return {
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
-            "cache_read_tokens": self.cache_read_tokens,
-            "cache_creation_tokens": self.cache_creation_tokens,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
         }

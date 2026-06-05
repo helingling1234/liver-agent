@@ -1,33 +1,48 @@
-"""FastAPI web backend for HepatoAI."""
+"""FastAPI web backend for HepatoAI — powered by Groq."""
 
 from __future__ import annotations
 import asyncio
 import json
+import os
 import uuid
 from typing import AsyncGenerator
 
-import anthropic
-from fastapi import FastAPI, Request
+from groq import Groq
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tools import TOOLS, execute_tool
-from prompts import get_system_prompt
+from prompts import PHYSICIAN_SYSTEM_PROMPT, PATIENT_SYSTEM_PROMPT
 
 app = FastAPI(title="HepatoAI")
 
-MODEL = "claude-sonnet-4-6"
-MAX_TOKENS = 4096
-
-# In-memory session store: session_id -> list of messages
+MODEL = "llama-3.3-70b-versatile"
 sessions: dict[str, list[dict]] = {}
+
+
+def _to_groq_tools(tools: list[dict]) -> list[dict]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        }
+        for t in tools
+    ]
+
+GROQ_TOOLS = _to_groq_tools(TOOLS)
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str
     mode: str = "physician"
+    lang: str = "zh"
 
 
 class NewSessionRequest(BaseModel):
@@ -47,85 +62,96 @@ def reset_session(session_id: str):
     return {"ok": True}
 
 
-async def stream_agent(message: str, session_id: str, mode: str) -> AsyncGenerator[str, None]:
-    """Run the agentic loop and stream SSE events to the client."""
-    client = anthropic.Anthropic()
+def _system_prompt(mode: str, lang: str) -> str:
+    base = PHYSICIAN_SYSTEM_PROMPT if mode == "physician" else PATIENT_SYSTEM_PROMPT
+    if lang == "en":
+        base += "\n\nIMPORTANT: The user is communicating in English. Please respond entirely in English."
+    else:
+        base += "\n\nIMPORTANT: 请用中文回复所有内容。"
+    return base
+
+
+async def stream_agent(message: str, session_id: str, mode: str, lang: str) -> AsyncGenerator[str, None]:
+    client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
     history = sessions.setdefault(session_id, [])
     history.append({"role": "user", "content": message})
 
     def send(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
+    system_msg = {"role": "system", "content": _system_prompt(mode, lang)}
+    loop = asyncio.get_event_loop()
     iterations = 0
     final_text = ""
 
     while iterations < 10:
         iterations += 1
 
-        # Run API call in thread pool so we don't block the event loop
-        loop = asyncio.get_event_loop()
+        messages = [system_msg] + history
+
         response = await loop.run_in_executor(
             None,
-            lambda: client.messages.create(
+            lambda: client.chat.completions.create(
                 model=MODEL,
-                max_tokens=MAX_TOKENS,
-                system=get_system_prompt(mode),
-                tools=TOOLS,
-                messages=history,
-                thinking={"type": "disabled"},
+                max_tokens=4096,
+                messages=messages,
+                tools=GROQ_TOOLS,
+                tool_choice="auto",
             ),
         )
 
-        # Emit usage info
+        msg = response.choices[0].message
+        usage = response.usage
+
         yield send("usage", {
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
-            "cache_read": getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-            "cache_write": getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+            "input_tokens": usage.prompt_tokens if usage else 0,
+            "output_tokens": usage.completion_tokens if usage else 0,
+            "cache_read": 0,
+            "cache_write": 0,
         })
 
-        text_parts = []
-        tool_use_blocks = []
-
-        for block in response.content:
-            if block.type == "text":
-                text_parts.append(block.text)
-                final_text += block.text
-                yield send("text", {"content": block.text})
-            elif block.type == "tool_use":
-                tool_use_blocks.append(block)
+        if msg.content:
+            final_text += msg.content
+            yield send("text", {"content": msg.content})
 
         # Append assistant message
-        history.append({"role": "assistant", "content": response.content})
+        history.append({
+            "role": "assistant",
+            "content": msg.content or "",
+            **({"tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]} if msg.tool_calls else {}),
+        })
 
-        if response.stop_reason == "end_turn" or not tool_use_blocks:
+        if not msg.tool_calls or response.choices[0].finish_reason == "stop":
             break
 
         # Execute tools
-        tool_results = []
-        for tool_block in tool_use_blocks:
-            yield send("tool_start", {
-                "name": tool_block.name,
-                "input": tool_block.input,
-            })
+        for tc in msg.tool_calls:
+            tool_name = tc.function.name
+            try:
+                tool_input = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                tool_input = {}
+
+            yield send("tool_start", {"name": tool_name, "input": tool_input})
 
             result = await loop.run_in_executor(
-                None,
-                lambda tb=tool_block: execute_tool(tb.name, tb.input),
+                None, lambda tn=tool_name, ti=tool_input: execute_tool(tn, ti)
             )
 
-            yield send("tool_result", {
-                "name": tool_block.name,
-                "result": result,
-            })
+            yield send("tool_result", {"name": tool_name, "result": result})
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_block.id,
+            history.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
                 "content": json.dumps(result, default=str),
             })
-
-        history.append({"role": "user", "content": tool_results})
 
     yield send("done", {"final_text": final_text})
 
@@ -133,12 +159,9 @@ async def stream_agent(message: str, session_id: str, mode: str) -> AsyncGenerat
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     return StreamingResponse(
-        stream_agent(req.message, req.session_id, req.mode),
+        stream_agent(req.message, req.session_id, req.mode, req.lang),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
