@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HepatoAI — 肝病临床决策支持 / Liver Disease Clinical AI</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f6fa; --surface: #ffffff; --surface2: #f0f2f7; --border: #dde2ee;
+    --accent: #2563eb; --accent2: #059669; --danger: #dc2626; --warn: #d97706;
+    --text: #1e2a3a; --text2: #4b5a72; --text3: #94a3b8;
+    --radius: 12px; --font: -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  /* Language switching — body starts with lang-zh (set on <body> tag directly) */
+  body.lang-zh .en,
+  body.lang-zh [class*="-en"] { display: none !important; }
+  body.lang-en .cn,
+  body.lang-en [class*="-cn"] { display: none !important; }
+
+  /* English mode: promote secondary-sized .en text to primary font sizes */
+  body.lang-en .logo-sub .en       { font-size: 12px; }
+  body.lang-en .sidebar-title .en  { font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; }
+  body.lang-en h2 .en              { font-size: 22px; font-weight: 700; color: var(--text); }
+  body.lang-en .welcome p .en      { font-size: 13px; color: var(--text2); }
+  body.lang-en .chip .en           { font-size: 12px; display: inline; }
+  body.lang-en .qb-en              { font-size: 13px; font-weight: 500; color: var(--text); }
+  body.lang-en .qb-sub-en          { font-size: 11px; color: var(--text2); }
+  body.lang-en .tool-en            { font-size: 12px; font-weight: 500; color: var(--text); }
+  body.lang-en .tc-name-en         { font-size: 12px; font-weight: 600; color: var(--text); }
+  body.lang-en .sc-label-en        { font-size: 11px; color: var(--text2); }
+
+  /* Header */
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 12px; }
+  .logo { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 700; white-space: nowrap; }
+  .logo-icon { font-size: 20px; }
+  .logo-sub { font-size: 11px; font-weight: 400; color: var(--text2); }
+  .logo-sub .cn { display: block; }
+  .logo-sub .en { display: block; font-size: 10px; color: var(--text3); }
+  .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  /* Toggle groups */
+  .toggle-group { display: flex; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .tg-btn { padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text2); transition: all .15s; white-space: nowrap; }
+  .tg-btn.active { background: var(--accent); color: #fff; }
+  .tg-btn.lang-active { background: var(--accent2); color: #fff; }
+
+  .btn-clear { padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: none; color: var(--text2); transition: all .15s; white-space: nowrap; }
+  .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
+  .usage-pill { font-size: 11px; color: var(--text3); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
+  .usage-pill span { color: var(--accent2); }
+
+  /* Layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-title { padding: 14px 18px 6px; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .8px; }
+  .quick-btns { padding: 0 10px 6px; display: flex; flex-direction: column; gap: 3px; }
+  .quick-btn { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; background: none; text-align: left; transition: all .15s; width: 100%; }
+  .quick-btn:hover { background: var(--surface2); border-color: var(--border); }
+  .quick-btn .qb-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .quick-btn .qb-cn { font-size: 12px; color: var(--text); line-height: 1.4; font-weight: 500; }
+  .quick-btn .qb-en { font-size: 11px; color: var(--text3); line-height: 1.4; margin-top: 1px; }
+  .quick-btn .qb-sub-cn { font-size: 11px; color: var(--text2); margin-top: 1px; }
+  .quick-btn .qb-sub-en { font-size: 10px; color: var(--text3); margin-top: 1px; }
+  .sidebar-div { height: 1px; background: var(--border); margin: 6px 18px; }
+  .tools-list { padding: 0 10px 10px; flex: 1; overflow-y: auto; }
+  .tool-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text2); line-height: 1.3; }
+  .tool-item.active { background: var(--surface2); color: var(--text); }
+  .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; margin-top: 4px; }
+  .tool-item.active .tool-dot { background: var(--accent2); }
+  .tool-cn { display: block; font-weight: 500; }
+  .tool-en { display: block; font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+  /* Chat */
+  .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
+  #messages::-webkit-scrollbar { width: 4px; }
+  #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg-row { display: flex; padding: 0 22px 18px; gap: 11px; }
+  .msg-row.user { flex-direction: row-reverse; }
+  .avatar { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; background: var(--surface2); border: 1px solid var(--border); }
+  .msg-row.user .avatar { background: var(--accent); border-color: var(--accent); }
+  .bubble-wrap { max-width: 76%; display: flex; flex-direction: column; gap: 7px; }
+  .msg-row.user .bubble-wrap { align-items: flex-end; }
+  .bubble { padding: 11px 15px; border-radius: 14px; font-size: 14px; line-height: 1.65; background: var(--surface); border: 1px solid var(--border); word-break: break-word; }
+  .msg-row.user .bubble { background: var(--accent); border-color: var(--accent); color: #fff; border-radius: 14px 4px 14px 14px; }
+  .bubble.ai { border-radius: 4px 14px 14px 14px; }
+  .bubble h1,.bubble h2,.bubble h3 { font-size: 14px; font-weight: 700; margin: 12px 0 5px; color: var(--accent); }
+  .bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child { margin-top: 0; }
+  .bubble p { margin-bottom: 7px; } .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul,.bubble ol { padding-left: 18px; margin-bottom: 7px; } .bubble li { margin-bottom: 3px; }
+  .bubble strong { color: var(--text); font-weight: 700; } .bubble em { color: var(--text2); }
+  .bubble code { background: rgba(37,99,235,.1); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; color: var(--accent); }
+  .bubble pre { background: #f8fafc; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 7px 0; border: 1px solid var(--border); }
+  .bubble pre code { background: none; padding: 0; color: var(--text); }
+  .bubble table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 7px 0; }
+  .bubble th { background: rgba(37,99,235,.1); padding: 5px 9px; text-align: left; font-weight: 600; border: 1px solid var(--border); color: var(--accent); }
+  .bubble td { padding: 4px 9px; border: 1px solid var(--border); }
+  .bubble tr:nth-child(even) td { background: #f8fafc; }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 9px 0; }
+
+  /* Tool cards */
+  .tool-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; background: var(--surface2); max-width: 76%; margin-left: 43px; margin-bottom: 7px; }
+  .tool-card-header { display: flex; align-items: center; gap: 8px; padding: 8px 13px; background: var(--surface2); cursor: pointer; }
+  .tc-icon { font-size: 14px; }
+  .tc-name { flex: 1; }
+  .tc-name-cn { font-weight: 600; font-size: 12px; color: var(--text); }
+  .tc-name-en { font-size: 10px; color: var(--text3); }
+  .tc-chevron { color: var(--text2); transition: transform .2s; font-size: 11px; }
+  .tool-card-header.open .tc-chevron { transform: rotate(180deg); }
+  .tool-card-body { padding: 11px 13px; border-top: 1px solid var(--border); display: none; }
+  .tool-card-body.open { display: block; }
+
+  /* Lab table */
+  .lab-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .lab-table th { padding: 5px 7px; text-align: left; color: var(--text2); font-weight: 600; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .lab-table td { padding: 5px 7px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .lab-table tr:last-child td { border-bottom: none; }
+  .status-normal { color: var(--accent2); } .status-high,.status-low { color: var(--warn); }
+  .status-critical_high,.status-critical_low,.status-abnormal { color: var(--danger); font-weight: 700; }
+
+  /* Score cards */
+  .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 7px; }
+  .score-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+  .sc-label-cn { font-size: 11px; color: var(--text2); } .sc-label-en { font-size: 10px; color: var(--text3); }
+  .sc-value { font-size: 20px; font-weight: 700; margin: 3px 0; }
+  .sc-sub { font-size: 11px; color: var(--text2); }
+  .grade-A,.grade-1 { color: var(--accent2); } .grade-B,.grade-2 { color: var(--warn); } .grade-C,.grade-3 { color: var(--danger); }
+
+  /* Urgent */
+  .urgent-banner { border-radius: 8px; padding: 9px 13px; margin-bottom: 7px; border-left: 3px solid; }
+  .urgent-banner.CRITICAL { background: rgba(242,92,84,.12); border-color: var(--danger); }
+  .urgent-banner.URGENT { background: rgba(245,166,35,.1); border-color: var(--warn); }
+  .ub-title { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .urgent-banner.CRITICAL .ub-title { color: var(--danger); } .urgent-banner.URGENT .ub-title { color: var(--warn); }
+  .ub-action { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .ub-time { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* DDx */
+  .ddx-item { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .ddx-item:last-child { border-bottom: none; }
+  .ddx-rank { width: 22px; height: 22px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text2); flex-shrink: 0; }
+  .ddx-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .ddx-steps { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .ddx-prob { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
+  .prob-high { background: rgba(242,92,84,.15); color: var(--danger); }
+  .prob-moderate { background: rgba(245,166,35,.15); color: var(--warn); }
+  .prob-low { background: var(--surface2); color: var(--text2); }
+
+  /* Fibrosis */
+  .fibrosis-bar { display: flex; gap: 3px; margin: 9px 0 5px; }
+  .fb-seg { flex: 1; height: 8px; border-radius: 3px; background: var(--border); }
+  .fb-seg.active-F0 { background: #38c9a0; } .fb-seg.active-F1 { background: #7ec8b0; }
+  .fb-seg.active-F2 { background: var(--warn); } .fb-seg.active-F3 { background: #f07b42; } .fb-seg.active-F4 { background: var(--danger); }
+  .fb-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); }
+
+  /* Thinking */
+  .thinking { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; color: var(--text2); max-width: 76%; margin-left: 43px; }
+  .thinking-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 1px; animation: bounce .9s infinite; }
+  .thinking-dots span:nth-child(2) { animation-delay: .15s; } .thinking-dots span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+  /* Welcome */
+  .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 20px; padding: 40px; text-align: center; }
+  .welcome-icon { font-size: 60px; }
+  .welcome h2 { font-size: 22px; font-weight: 700; }
+  .welcome h2 .en { display: block; font-size: 14px; font-weight: 400; color: var(--text2); margin-top: 4px; }
+  .welcome p { font-size: 13px; color: var(--text2); max-width: 460px; line-height: 1.7; }
+  .welcome p .en { display: block; font-size: 12px; color: var(--text3); margin-top: 3px; }
+  .welcome-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; max-width: 540px; }
+  .chip { padding: 6px 13px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text2); cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(37,99,235,.07); }
+  .chip .en { font-size: 10px; color: var(--text3); display: block; margin-top: 1px; }
+
+  /* Input */
+  .input-area { padding: 14px 22px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .input-row { display: flex; gap: 9px; align-items: flex-end; }
+  #user-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 15px; color: var(--text); font-size: 14px; font-family: var(--font); resize: none; outline: none; line-height: 1.5; max-height: 160px; min-height: 46px; transition: border-color .15s; }
+  #user-input:focus { border-color: var(--accent); }
+  #user-input::placeholder { color: var(--text3); }
+  #send-btn { width: 44px; height: 44px; border-radius: 11px; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s; font-size: 17px; }
+  #send-btn:disabled { opacity: .4; cursor: not-allowed; }
+  #send-btn:not(:disabled):hover { opacity: .85; }
+  .input-hint { font-size: 11px; color: var(--text3); margin-top: 5px; text-align: right; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body class="lang-zh">
+
+<header>
+  <div class="logo">
+    <span class="logo-icon">🔬</span>
+    HepatoAI
+    <div class="logo-sub">
+      <span class="cn">肝病临床决策支持</span>
+      <span class="en">Liver Disease Clinical AI</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div id="usage-display" class="usage-pill" style="display:none">
+      Tokens: <span id="usage-val">0</span> · Cache: <span id="cache-val">0</span>
+    </div>
+    <!-- Language -->
+    <div class="toggle-group">
+      <button class="tg-btn lang-active" id="btn-zh" onclick="setLang('zh')">中文</button>
+      <button class="tg-btn" id="btn-en" onclick="setLang('en')">English</button>
+    </div>
+    <!-- Mode -->
+    <div class="toggle-group">
+      <button class="tg-btn active" id="btn-physician" onclick="setMode('physician')">
+        <span id="mode-label-phys">👨‍⚕️ 医生</span>
+      </button>
+      <button class="tg-btn" id="btn-patient" onclick="setMode('patient')">
+        <span id="mode-label-pat">🏥 患者</span>
+      </button>
+    </div>
+    <button class="btn-clear" id="btn-clear" onclick="clearChat()">清除对话</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-title"><span class="cn">快速案例</span><span class="en">Quick Cases</span></div>
+    <div class="quick-btns">
+      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="患者45岁男性，HBV感染10年，出现腹水、黄疸。化验：ALT 85 U/L，AST 120 U/L，胆红素 4.2 mg/dL，白蛋白 2.8 g/dL，INR 1.9，肌酐 1.4，血小板 85，AFP 45，HBsAg阳性，HBV DNA 50000 IU/mL。超声：肝脏结节状，脾大，中量腹水。" data-q-en="45-year-old male with 10-year HBV infection presenting with ascites and jaundice. Labs: ALT 85, AST 120, total bilirubin 4.2 mg/dL, albumin 2.8 g/dL, INR 1.9, creatinine 1.4, platelets 85k, AFP 45 ng/mL, HBsAg positive, HBV DNA 50,000 IU/mL. Ultrasound: nodular liver, splenomegaly, moderate ascites.">
+        <span class="qb-icon">🦠</span>
+        <div>
+          <div class="qb-cn">HBV 肝硬化</div>
+          <div class="qb-en">HBV Cirrhosis</div>
+          <div class="qb-sub-cn">45岁男，腹水+黄疸</div>
+          <div class="qb-sub-en">M45, ascites + jaundice</div>
+        </div>
+      </button>
+      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="女性52岁，肥胖（BMI 32），2型糖尿病，血脂异常。ALT 68，AST 52，GGT 95，ALP 120 U/L。超声：中度脂肪肝，回声增强。否认饮酒。" data-q-en="52-year-old female, obese (BMI 32), type 2 diabetes, dyslipidemia. ALT 68, AST 52, GGT 95, ALP 120 U/L. Ultrasound: moderate hepatic steatosis with increased echogenicity. No alcohol use.">
+        <span class="qb-icon">🫀</span>
+        <div>
+          <div class="qb-cn">NAFLD / NASH</div>
+          <div class="qb-en">NAFLD / NASH</div>
+          <div class="qb-sub-cn">52岁女，代谢综合征</div>
+          <div class="qb-sub-en">F52, metabolic syndrome</div>
+        </div>
+      </button>
+      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="男性28岁，HCV抗体阳性，HCV RNA 2,500,000 IU/mL，基因型1b。ALT 95，AST 78，血小板 185，白蛋白 4.1，INR 1.0，Fibroscan 8.2 kPa。" data-q-en="28-year-old male, HCV Ab positive, HCV RNA 2,500,000 IU/mL, genotype 1b. ALT 95, AST 78, platelets 185k, albumin 4.1 g/dL, INR 1.0, Fibroscan 8.2 kPa.">
+        <span class="qb-icon">💉</span>
+        <div>
+          <div class="qb-cn">丙型肝炎</div>
+          <div class="qb-en">Hepatitis C</div>
+          <div class="qb-sub-cn">28岁男，GT1b</div>
+          <div class="qb-sub-en">M28, genotype 1b</div>
+        </div>
+      </button>
+      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="男性38岁，急性起病1周，无既往肝病史。黄疸、意识模糊。ALT 2800，AST 3200，总胆红素 15 mg/dL，INR 2.8，肌酐 1.8。服用对乙酰氨基酚过量史。" data-q-en="38-year-old male, acute onset 1 week, no prior liver disease. Jaundice and confusion. ALT 2800, AST 3200, total bilirubin 15 mg/dL, INR 2.8, creatinine 1.8. History of acetaminophen overdose.">
+        <span class="qb-icon">🚨</span>
+        <div>
+          <div class="qb-cn">急性肝衰竭</div>
+          <div class="qb-en">Acute Liver Failure</div>
+          <div class="qb-sub-cn">对乙酰氨基酚中毒</div>
+          <div class="qb-sub-en">Acetaminophen overdose</div>
+        </div>
+      </button>
+      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="女性35岁，乏力、黄疸2个月，无病毒性肝炎。ALT 320，AST 280，IgG 2400 mg/dL，ANA 1:320阳性，ASMA阳性。" data-q-en="35-year-old female, fatigue and jaundice 2 months, no viral hepatitis. ALT 320, AST 280, IgG 2400 mg/dL, ANA 1:320 positive, ASMA positive.">
+        <span class="qb-icon">🔬</span>
+        <div>
+          <div class="qb-cn">自身免疫性肝炎</div>
+          <div class="qb-en">Autoimmune Hepatitis</div>
+          <div class="qb-sub-cn">35岁女，高IgG+ANA阳性</div>
+          <div class="qb-sub-en">F35, elevated IgG + ANA+</div>
+        </div>
+      </button>
+    </div>
+    <div class="sidebar-div"></div>
+    <div class="sidebar-title"><span class="cn">可用工具</span><span class="en">Tools</span></div>
+    <div class="tools-list" id="tools-status">
+      <div class="tool-item" data-tool="parse_lab_values"><div class="tool-dot"></div><div><span class="tool-cn">🧪 化验值解析</span><span class="tool-en">Lab Value Parser</span></div></div>
+      <div class="tool-item" data-tool="calculate_severity_scores"><div class="tool-dot"></div><div><span class="tool-cn">📊 严重程度评分</span><span class="tool-en">Severity Scoring (Child-Pugh/MELD)</span></div></div>
+      <div class="tool-item" data-tool="differential_diagnosis"><div class="tool-dot"></div><div><span class="tool-cn">🔍 鉴别诊断</span><span class="tool-en">Differential Diagnosis</span></div></div>
+      <div class="tool-item" data-tool="assess_fibrosis_stage"><div class="tool-dot"></div><div><span class="tool-cn">📈 纤维化分期</span><span class="tool-en">Fibrosis Staging</span></div></div>
+      <div class="tool-item" data-tool="get_treatment_guidelines"><div class="tool-dot"></div><div><span class="tool-cn">💊 治疗指南</span><span class="tool-en">Treatment Guidelines</span></div></div>
+      <div class="tool-item" data-tool="generate_clinical_summary"><div class="tool-dot"></div><div><span class="tool-cn">📋 临床总结</span><span class="tool-en">Clinical Summary</span></div></div>
+      <div class="tool-item" data-tool="flag_urgent_findings"><div class="tool-dot"></div><div><span class="tool-cn">🚨 紧急情况筛查</span><span class="tool-en">Urgent Findings</span></div></div>
+    </div>
+  </aside>
+
+  <!-- Chat -->
+  <div class="chat-area">
+    <div id="messages">
+      <div id="welcome" class="welcome">
+        <div class="welcome-icon">🫁</div>
+        <h2>
+          <span class="cn">HepatoAI 肝病决策支持</span>
+          <span class="en">HepatoAI Liver Disease Clinical AI</span>
+        </h2>
+        <p>
+          <span class="cn">输入病历、化验结果或临床问题，AI 将自动分析并提供基于 AASLD/EASL 指南的临床建议。</span>
+          <span class="en">Enter clinical notes, lab results, or questions. AI will analyze and provide evidence-based recommendations per AASLD/EASL guidelines.</span>
+        </p>
+        <div class="welcome-chips">
+          <div class="chip" data-q-zh="Child-Pugh评分如何计算？" data-q-en="How is the Child-Pugh score calculated?" onclick="quickChip(this)">
+            <span class="cn">Child-Pugh 评分</span><span class="en">Child-Pugh Score</span>
+          </div>
+          <div class="chip" data-q-zh="HBV肝硬化的HCC监测方案？" data-q-en="What is the HCC surveillance protocol in HBV cirrhosis?" onclick="quickChip(this)">
+            <span class="cn">HCC 监测</span><span class="en">HCC Surveillance</span>
+          </div>
+          <div class="chip" data-q-zh="急性肝衰竭的紧急处理？" data-q-en="How to manage acute liver failure emergently?" onclick="quickChip(this)">
+            <span class="cn">急性肝衰竭</span><span class="en">Acute Liver Failure</span>
+          </div>
+          <div class="chip" data-q-zh="DAA治疗丙肝的方案？" data-q-en="What are the DAA regimens for HCV treatment?" onclick="quickChip(this)">
+            <span class="cn">HCV DAA 方案</span><span class="en">HCV DAA Regimens</span>
+          </div>
+          <div class="chip" data-q-zh="NAFLD/NASH如何治疗？" data-q-en="How to treat NAFLD/NASH?" onclick="quickChip(this)">
+            <span class="cn">NAFLD 治疗</span><span class="en">NAFLD Treatment</span>
+          </div>
+          <div class="chip" data-q-zh="静脉曲张破裂出血的处理？" data-q-en="How to manage variceal hemorrhage?" onclick="quickChip(this)">
+            <span class="cn">静脉曲张出血</span><span class="en">Variceal Hemorrhage</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-row">
+        <textarea id="user-input" placeholder="输入病历、化验结果或临床问题 / Enter clinical notes, lab results, or questions..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="send-btn" onclick="sendMessage()" title="Send (Enter)">➤</button>
+      </div>
+      <div class="input-hint" id="input-hint">Enter 发送 / Send · Shift+Enter 换行 / New line</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── i18n ──
+const T = {
+  zh: {
+    mode_phys: '👨‍⚕️ 医生', mode_pat: '🏥 患者', clear: '清除对话',
+    thinking: 'HepatoAI 正在分析...',
+    hint: 'Enter 发送 · Shift+Enter 换行',
+    no_urgent: '✓ 未发现危急/紧急情况',
+    no_labs: '未提取到化验值',
+    no_scores: '数据不足，无法计算评分',
+    no_ddx: '无法生成鉴别诊断',
+    render_err: '渲染错误',
+    first_line: '一线治疗',
+    goals: '治疗目标',
+    source: '来源',
+    prob: { high:'高概率', moderate:'中概率', low:'低概率' },
+    status: { normal:'✓ 正常', high:'↑ 偏高', low:'↓ 偏低', critical_high:'⚠ 危急↑', critical_low:'⚠ 危急↓', abnormal:'⚠ 异常' },
+    missing: '缺少',
+    tool_labels: {
+      parse_lab_values: ['化验值解析', 'Lab Value Parser'],
+      calculate_severity_scores: ['严重程度评分', 'Severity Scoring'],
+      differential_diagnosis: ['鉴别诊断', 'Differential Diagnosis'],
+      assess_fibrosis_stage: ['纤维化分期', 'Fibrosis Staging'],
+      get_treatment_guidelines: ['治疗指南', 'Treatment Guidelines'],
+      generate_clinical_summary: ['临床总结', 'Clinical Summary'],
+      flag_urgent_findings: ['紧急情况筛查', 'Urgent Findings'],
+    },
+  },
+  en: {
+    mode_phys: '👨‍⚕️ Physician', mode_pat: '🏥 Patient', clear: 'Clear Chat',
+    thinking: 'HepatoAI is analyzing...',
+    hint: 'Enter to send · Shift+Enter for new line',
+    no_urgent: '✓ No urgent or critical findings identified',
+    no_labs: 'No lab values extracted',
+    no_scores: 'Insufficient data for scoring',
+    no_ddx: 'Unable to generate differential diagnosis',
+    render_err: 'Render error',
+    first_line: 'First-Line Treatment',
+    goals: 'Treatment Goals',
+    source: 'Source',
+    prob: { high:'High', moderate:'Moderate', low:'Low' },
+    status: { normal:'✓ Normal', high:'↑ High', low:'↓ Low', critical_high:'⚠ CRIT↑', critical_low:'⚠ CRIT↓', abnormal:'⚠ Abnormal' },
+    missing: 'Missing',
+    tool_labels: {
+      parse_lab_values: ['Lab Value Parser', '化验值解析'],
+      calculate_severity_scores: ['Severity Scoring (Child-Pugh/MELD/ALBI)', '严重程度评分'],
+      differential_diagnosis: ['Differential Diagnosis', '鉴别诊断'],
+      assess_fibrosis_stage: ['Fibrosis Staging', '纤维化分期'],
+      get_treatment_guidelines: ['Treatment Guidelines', '治疗指南'],
+      generate_clinical_summary: ['Clinical Summary', '临床总结'],
+      flag_urgent_findings: ['Urgent Findings', '紧急情况筛查'],
+    },
+  },
+};
+
+// ── State ──
+let sessionId = null, mode = 'physician', lang = 'zh';
+let totalTokens = 0, cacheTokens = 0, isStreaming = false;
+let currentAiBubble = null, currentAiText = '';
+
+const ICONS = { parse_lab_values:'🧪', calculate_severity_scores:'📊', differential_diagnosis:'🔍', assess_fibrosis_stage:'📈', get_treatment_guidelines:'💊', generate_clinical_summary:'📋', flag_urgent_findings:'🚨' };
+
+async function init() {
+  // body already has lang-zh from HTML; just ensure it
+  if (!document.body.classList.contains('lang-zh') && !document.body.classList.contains('lang-en')) {
+    document.body.classList.add('lang-zh');
+  }
+  const r = await fetch('/api/session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode}) });
+  sessionId = (await r.json()).session_id;
+}
+init();
+
+// ── Lang ──
+function setLang(l) {
+  lang = l;
+  // Toggle body class — CSS handles all .cn / .en visibility
+  document.body.classList.remove('lang-zh', 'lang-en');
+  document.body.classList.add('lang-' + l);
+  document.getElementById('btn-zh').classList.toggle('lang-active', l === 'zh');
+  document.getElementById('btn-en').classList.toggle('lang-active', l === 'en');
+  const t = T[lang];
+  document.getElementById('mode-label-phys').textContent = t.mode_phys;
+  document.getElementById('mode-label-pat').textContent = t.mode_pat;
+  document.getElementById('btn-clear').textContent = t.clear;
+  document.getElementById('input-hint').textContent = t.hint;
+  document.getElementById('user-input').placeholder = l === 'en'
+    ? 'Enter clinical notes, lab results, or questions...'
+    : '输入病历、化验结果或临床问题...';
+  document.title = l === 'en'
+    ? 'HepatoAI — Liver Disease Clinical AI'
+    : 'HepatoAI — 肝病临床决策支持';
+}
+
+// ── Mode ──
+function setMode(m) {
+  mode = m;
+  document.getElementById('btn-physician').classList.toggle('active', m === 'physician');
+  document.getElementById('btn-patient').classList.toggle('active', m === 'patient');
+}
+
+// ── Clear ──
+async function clearChat() {
+  if (sessionId) await fetch(`/api/session/${sessionId}`, { method:'DELETE' });
+  location.reload();
+}
+
+function quickQuery(btn) {
+  const q = lang === 'en' ? (btn.dataset.qEn || btn.dataset['q-en']) : (btn.dataset.qZh || btn.dataset['q-zh']);
+  document.getElementById('user-input').value = q || btn.dataset.q || '';
+  sendMessage();
+}
+function quickText(t) {
+  document.getElementById('user-input').value = t;
+  sendMessage();
+}
+function quickChip(btn) {
+  const q = lang === 'en' ? btn.dataset.qEn : btn.dataset.qZh;
+  document.getElementById('user-input').value = q || '';
+  sendMessage();
+}
+
+function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+
+// ── Send ──
+async function sendMessage() {
+  const inp = document.getElementById('user-input');
+  const msg = inp.value.trim();
+  if (!msg || isStreaming) return;
+  isStreaming = true;
+  document.getElementById('send-btn').disabled = true;
+  inp.value = ''; inp.style.height = 'auto';
+  const w = document.getElementById('welcome'); if (w) w.remove();
+  appendUserMsg(msg); showThinking(); resetToolsUI();
+  try {
+    const resp = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: msg, session_id: sessionId, mode, lang }) });
+    const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        let event = '', data = '';
+        for (const l of part.split('\n')) { if (l.startsWith('event: ')) event = l.slice(7); if (l.startsWith('data: ')) data = l.slice(6); }
+        if (!event || !data) continue;
+        try { handleEvent(event, JSON.parse(data)); } catch {}
+      }
+    }
+  } catch (e) { removeThinking(); appendError('Connection error: ' + e.message); }
+  removeThinking(); finaliseAiBubble();
+  isStreaming = false; document.getElementById('send-btn').disabled = false; inp.focus();
+}
+
+function handleEvent(event, data) {
+  const t = T[lang];
+  if (event === 'text') {
+    removeThinking(); if (!currentAiBubble) startAiBubble();
+    currentAiText += data.content;
+    currentAiBubble.innerHTML = renderMarkdown(currentAiText); scrollBottom();
+  } else if (event === 'tool_start') {
+    removeThinking(); activateTool(data.name);
+    const lbl = t.tool_labels[data.name]; showThinking(ICONS[data.name] + ' ' + (lbl ? lbl[0] : data.name) + '...');
+  } else if (event === 'tool_result') {
+    removeThinking(); renderToolCard(data.name, data.result);
+  } else if (event === 'usage') {
+    totalTokens += (data.input_tokens||0) + (data.output_tokens||0); cacheTokens += (data.cache_read||0);
+    document.getElementById('usage-display').style.display = '';
+    document.getElementById('usage-val').textContent = totalTokens.toLocaleString();
+    document.getElementById('cache-val').textContent = cacheTokens.toLocaleString();
+  } else if (event === 'done') { removeThinking(); finaliseAiBubble(); }
+}
+
+function startAiBubble() {
+  const msgs = document.getElementById('messages');
+  const row = document.createElement('div'); row.className = 'msg-row ai';
+  row.innerHTML = `<div class="avatar">🤖</div><div class="bubble-wrap"><div class="bubble ai" id="ai-bubble-current"></div></div>`;
+  msgs.appendChild(row); currentAiBubble = row.querySelector('#ai-bubble-current'); scrollBottom();
+}
+function finaliseAiBubble() { if (currentAiBubble) { currentAiBubble.removeAttribute('id'); currentAiBubble = null; currentAiText = ''; } }
+function appendUserMsg(text) {
+  const msgs = document.getElementById('messages'); const row = document.createElement('div'); row.className = 'msg-row user';
+  row.innerHTML = `<div class="avatar">👤</div><div class="bubble-wrap"><div class="bubble">${escHtml(text)}</div></div>`;
+  msgs.appendChild(row); scrollBottom();
+}
+function appendError(msg) { const d = document.createElement('div'); d.style.cssText = 'text-align:center;color:#f25c54;font-size:13px;padding:8px 24px'; d.textContent = msg; document.getElementById('messages').appendChild(d); }
+
+function showThinking(label) {
+  removeThinking();
+  const d = document.createElement('div'); d.id = 'thinking-indicator'; d.className = 'thinking';
+  d.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>${label || T[lang].thinking}</span>`;
+  document.getElementById('messages').appendChild(d); scrollBottom();
+}
+function removeThinking() { const el = document.getElementById('thinking-indicator'); if (el) el.remove(); }
+
+// ── Tool card rendering ──
+function renderToolCard(toolName, result) {
+  const t = T[lang]; const icon = ICONS[toolName] || '⚙️';
+  const lbl = t.tool_labels[toolName] || [toolName, toolName];
+  const card = document.createElement('div'); card.className = 'tool-card';
+  let bodyHTML = '';
+  try {
+    if (toolName === 'parse_lab_values') bodyHTML = renderLabValues(result);
+    else if (toolName === 'calculate_severity_scores') bodyHTML = renderScores(result);
+    else if (toolName === 'flag_urgent_findings') bodyHTML = renderUrgent(result);
+    else if (toolName === 'differential_diagnosis') bodyHTML = renderDDx(result);
+    else if (toolName === 'assess_fibrosis_stage') bodyHTML = renderFibrosis(result);
+    else if (toolName === 'get_treatment_guidelines') bodyHTML = renderTreatment(result);
+    else bodyHTML = `<pre style="font-size:11px;overflow:auto;white-space:pre-wrap">${escHtml(JSON.stringify(result, null, 2))}</pre>`;
+  } catch(e) { bodyHTML = `<span style="color:var(--danger)">${t.render_err}: ${escHtml(e.message)}</span>`; }
+
+  card.innerHTML = `
+    <div class="tool-card-header open" onclick="toggleCard(this)">
+      <span class="tc-icon">${icon}</span>
+      <div class="tc-name"><div class="tc-name-cn">${lbl[0]}</div><div class="tc-name-en">${lbl[1]}</div></div>
+      <span class="tc-chevron">▼</span>
+    </div>
+    <div class="tool-card-body open">${bodyHTML}</div>`;
+  document.getElementById('messages').appendChild(card); scrollBottom();
+}
+function toggleCard(h) { h.classList.toggle('open'); h.nextElementSibling.classList.toggle('open'); }
+
+function renderLabValues(r) {
+  const t = T[lang];
+  if (!r.values || !r.values.length) return `<span style="color:var(--text2)">${t.no_labs}</span>`;
+  const hdr = lang === 'zh'
+    ? '<tr><th>指标 / Test</th><th>数值 / Value</th><th>参考范围 / Reference</th><th>状态 / Status</th><th>解读 / Interpretation</th></tr>'
+    : '<tr><th>Test</th><th>Value</th><th>Reference Range</th><th>Status</th><th>Interpretation</th></tr>';
+  const rows = r.values.map(v => `<tr><td>${escHtml(v.name)}</td><td>${escHtml(String(v.value))} ${escHtml(v.unit)}</td><td style="color:var(--text2)">${escHtml(v.reference_range)}</td><td class="status-${v.status}">${t.status[v.status]||v.status}</td><td style="color:var(--text2);font-size:12px">${escHtml(v.interpretation)}</td></tr>`).join('');
+  return `<table class="lab-table">${hdr}${rows}</table><div style="margin-top:4px;font-size:11px;color:var(--text2)">${escHtml(r.summary||'')}</div>`;
+}
+
+function renderScores(r) {
+  const t = T[lang]; const cards = [];
+  if (r.child_pugh) {
+    const g = r.child_pugh.grade; const lbl = lang === 'zh' ? 'Child-Pugh' : 'Child-Pugh';
+    cards.push(`<div class="score-card"><div class="sc-label-cn">Child-Pugh</div><div class="sc-value grade-${g}">Grade ${g}</div><div class="sc-sub">Score ${r.child_pugh.total_score}/15</div><div class="sc-sub">${r.child_pugh.one_year_survival} ${lang==='zh'?'1年生存':'1-yr survival'}</div></div>`);
+  }
+  if (r.meld) {
+    const s = r.meld.score; const col = s<10?'grade-A':s<20?'grade-B':'grade-C';
+    cards.push(`<div class="score-card"><div class="sc-label-cn">MELD</div><div class="sc-value ${col}">${s}</div><div class="sc-sub">${r.meld.category}</div><div class="sc-sub">${r.meld.three_month_mortality} ${lang==='zh'?'3月死亡率':'3-mo mortality'}</div></div>`);
+  }
+  if (r.albi) {
+    cards.push(`<div class="score-card"><div class="sc-label-cn">ALBI</div><div class="sc-value grade-${r.albi.grade}">Grade ${r.albi.grade}</div><div class="sc-sub">Score ${r.albi.score}</div></div>`);
+  }
+  if (!cards.length) return `<span style="color:var(--text2)">${t.no_scores}. ${t.missing}: ${(r.missing_values||[]).join(', ')}</span>`;
+  return `<div class="score-grid">${cards.join('')}</div>`;
+}
+
+function renderUrgent(r) {
+  const t = T[lang];
+  if (!r.findings || !r.findings.length) return `<span style="color:var(--accent2)">${t.no_urgent}</span>`;
+  return r.findings.map(f => `
+    <div class="urgent-banner ${f.urgency_level}">
+      <div class="ub-title">${f.urgency_level==='CRITICAL'?'🚨':'⚠️'} ${escHtml(f.finding)}</div>
+      <div class="ub-action">→ ${escHtml(f.recommended_action)}</div>
+      <div class="ub-time">⏱ ${escHtml(f.timeframe)}</div>
+    </div>`).join('');
+}
+
+function renderDDx(r) {
+  const t = T[lang];
+  if (!r.differentials || !r.differentials.length) return `<span style="color:var(--text2)">${t.no_ddx}</span>`;
+  return r.differentials.map(d => `
+    <div class="ddx-item">
+      <div class="ddx-rank">${d.rank}</div>
+      <div style="flex:1">
+        <div class="ddx-name">${escHtml(d.condition)}</div>
+        ${d.next_steps&&d.next_steps.length?`<div class="ddx-steps">${d.next_steps.slice(0,3).map(escHtml).join(' · ')}</div>`:''}
+      </div>
+      <div class="ddx-prob prob-${d.probability}">${t.prob[d.probability]||d.probability}</div>
+    </div>`).join('');
+}
+
+function renderFibrosis(r) {
+  const stageMap = {F0:0,F1:1,'F0-F1':0.5,F2:2,'F1-F2':1.5,F3:3,'F3-F4':3.5,F4:4,'F0-F2':1};
+  const stages = ['F0','F1','F2','F3','F4'];
+  const idx = stageMap[r.stage] ?? 0;
+  const segs = stages.map((s,i) => `<div class="fb-seg ${i<=Math.round(idx)?'active-'+stages[Math.min(Math.round(idx),4)]:''}"></div>`).join('');
+  const evidence = (r.supporting_evidence||[]).map(e=>`<div style="font-size:12px;color:var(--text2);margin-bottom:3px">• ${escHtml(e)}</div>`).join('');
+  return `<div style="font-size:15px;font-weight:700;margin-bottom:6px">${escHtml(r.stage)} — ${escHtml(r.description)}</div><div class="fibrosis-bar">${segs}</div><div class="fb-labels"><span>F0</span><span>F1</span><span>F2</span><span>F3</span><span>F4</span></div><div style="margin-top:10px">${evidence}</div>`;
+}
+
+function renderTreatment(r) {
+  const t = T[lang];
+  const lines = (arr) => (arr||[]).slice(0,4).map(x=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text2)">• ${escHtml(x)}</div>`).join('');
+  return `
+    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">${t.first_line}</div>
+    ${lines(r.first_line_treatment)}
+    ${r.treatment_goals&&r.treatment_goals.length?`<div style="font-size:12px;font-weight:700;color:var(--accent2);margin:10px 0 6px">${t.goals}</div>${r.treatment_goals.slice(0,3).map(g=>`<div style="font-size:12px;color:var(--text2);padding:2px 0">✓ ${escHtml(g)}</div>`).join('')}`:''}
+    ${r.guideline_source?`<div style="font-size:11px;color:var(--text3);margin-top:8px;font-style:italic">${t.source}: ${escHtml(r.guideline_source)}</div>`:''}`;
+}
+
+function activateTool(name) { document.querySelectorAll('.tool-item').forEach(el => { if (el.dataset.tool === name) el.classList.add('active'); }); }
+function resetToolsUI() { document.querySelectorAll('.tool-item').forEach(el => el.classList.remove('active')); }
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function scrollBottom() { const el = document.getElementById('messages'); el.scrollTop = el.scrollHeight; }
+
+function renderMarkdown(text) {
+  let h = escHtml(text);
+  h = h.replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  h = h.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>');
+  h = h.replace(/`([^`]+)`/g,'<code>$1</code>');
+  h = h.replace(/```[\s\S]*?```/g, m=>`<pre><code>${m.slice(3,-3).replace(/^[^\n]*\n/,'')}</code></pre>`);
+  h = h.replace(/^---+$/gm,'<hr>');
+  h = h.replace(/((?:^[*\-+] .+\n?)+)/gm, m=>'<ul>'+m.replace(/^[*\-+] (.+)$/gm,'<li>$1</li>')+'</ul>');
+  h = h.replace(/((?:^\d+\. .+\n?)+)/gm, m=>'<ol>'+m.replace(/^\d+\. (.+)$/gm,'<li>$1</li>')+'</ol>');
+  h = h.replace(/\n{2,}/g,'</p><p>'); h = '<p>'+h+'</p>';
+  ['h1','h2','h3','ul','ol','pre'].forEach(t => { h = h.replace(new RegExp(`<p>(<${t}>)`,'g'),'$1').replace(new RegExp(`(</${t}>)<\\/p>`,'g'),'$1'); });
+  h = h.replace(/<p>(<hr>)<\/p>/g,'$1').replace(/<p>\s*<\/p>/g,'').replace(/\n/g,'<br>');
+  return h;
+}
+</script>
+</body>
+</html>
