@@ -1,90 +1,62 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HepatoAI — 肝病临床决策支持 / Liver Disease Clinical AI</title>
+<title>HepatoAI — Liver Disease Clinical Decision Support</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --bg: #f4f6fa; --surface: #ffffff; --surface2: #f0f2f7; --border: #dde2ee;
     --accent: #2563eb; --accent2: #059669; --danger: #dc2626; --warn: #d97706;
     --text: #1e2a3a; --text2: #4b5a72; --text3: #94a3b8;
-    --radius: 12px; --font: -apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    --font: -apple-system, 'Segoe UI', Arial, sans-serif;
   }
   body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-  /* Language switching — body starts with lang-zh (set on <body> tag directly) */
-  body.lang-zh .en,
-  body.lang-zh [class*="-en"] { display: none !important; }
-  body.lang-en .cn,
-  body.lang-en [class*="-cn"] { display: none !important; }
-
-  /* English mode: promote secondary-sized .en text to primary font sizes */
-  body.lang-en .logo-sub .en       { font-size: 12px; }
-  body.lang-en .sidebar-title .en  { font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; }
-  body.lang-en h2 .en              { font-size: 22px; font-weight: 700; color: var(--text); }
-  body.lang-en .welcome p .en      { font-size: 13px; color: var(--text2); }
-  body.lang-en .chip .en           { font-size: 12px; display: inline; }
-  body.lang-en .qb-en              { font-size: 13px; font-weight: 500; color: var(--text); }
-  body.lang-en .qb-sub-en          { font-size: 11px; color: var(--text2); }
-  body.lang-en .tool-en            { font-size: 12px; font-weight: 500; color: var(--text); }
-  body.lang-en .tc-name-en         { font-size: 12px; font-weight: 600; color: var(--text); }
-  body.lang-en .sc-label-en        { font-size: 11px; color: var(--text2); }
 
   /* Header */
-  header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 12px; }
-  .logo { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 700; white-space: nowrap; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 54px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .logo { display: flex; align-items: center; gap: 9px; }
   .logo-icon { font-size: 20px; }
-  .logo-sub { font-size: 11px; font-weight: 400; color: var(--text2); }
-  .logo-sub .cn { display: block; }
-  .logo-sub .en { display: block; font-size: 10px; color: var(--text3); }
-  .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-  /* Toggle groups */
-  .toggle-group { display: flex; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .tg-btn { padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text2); transition: all .15s; white-space: nowrap; }
-  .tg-btn.active { background: var(--accent); color: #fff; }
-  .tg-btn.lang-active { background: var(--accent2); color: #fff; }
-
-  .btn-clear { padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); border-radius: 8px; background: none; color: var(--text2); transition: all .15s; white-space: nowrap; }
+  .logo-title { font-size: 17px; font-weight: 700; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--text3); margin-left: 4px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .badge { display: flex; align-items: center; gap: 5px; padding: 4px 10px; background: rgba(5,150,105,.1); border: 1px solid rgba(5,150,105,.25); border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--accent2); }
+  .usage-pill { font-size: 11px; color: var(--text3); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; }
+  .usage-pill span { color: var(--accent); }
+  .btn-clear { padding: 5px 12px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); border-radius: 7px; background: none; color: var(--text2); transition: all .15s; }
   .btn-clear:hover { border-color: var(--danger); color: var(--danger); }
-  .usage-pill { font-size: 11px; color: var(--text3); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
-  .usage-pill span { color: var(--accent2); }
 
   /* Layout */
   .main { display: flex; flex: 1; overflow: hidden; }
 
   /* Sidebar */
-  .sidebar { width: 270px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-  .sidebar-title { padding: 14px 18px 6px; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .8px; }
+  .sidebar { width: 256px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sb-section { padding: 12px 14px 4px; font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
   .quick-btns { padding: 0 10px 6px; display: flex; flex-direction: column; gap: 3px; }
-  .quick-btn { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; background: none; text-align: left; transition: all .15s; width: 100%; }
+  .quick-btn { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; background: none; text-align: left; transition: all .15s; width: 100%; }
   .quick-btn:hover { background: var(--surface2); border-color: var(--border); }
-  .quick-btn .qb-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
-  .quick-btn .qb-cn { font-size: 12px; color: var(--text); line-height: 1.4; font-weight: 500; }
-  .quick-btn .qb-en { font-size: 11px; color: var(--text3); line-height: 1.4; margin-top: 1px; }
-  .quick-btn .qb-sub-cn { font-size: 11px; color: var(--text2); margin-top: 1px; }
-  .quick-btn .qb-sub-en { font-size: 10px; color: var(--text3); margin-top: 1px; }
-  .sidebar-div { height: 1px; background: var(--border); margin: 6px 18px; }
+  .qb-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+  .qb-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; }
+  .qb-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .sb-div { height: 1px; background: var(--border); margin: 6px 14px; }
   .tools-list { padding: 0 10px 10px; flex: 1; overflow-y: auto; }
-  .tool-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text2); line-height: 1.3; }
+  .tool-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text2); }
   .tool-item.active { background: var(--surface2); color: var(--text); }
-  .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; margin-top: 4px; }
+  .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
   .tool-item.active .tool-dot { background: var(--accent2); }
-  .tool-cn { display: block; font-weight: 500; }
-  .tool-en { display: block; font-size: 10px; color: var(--text3); margin-top: 1px; }
 
   /* Chat */
   .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #messages { flex: 1; overflow-y: auto; padding: 24px 0; scroll-behavior: smooth; }
+  #messages { flex: 1; overflow-y: auto; padding: 22px 0; scroll-behavior: smooth; }
   #messages::-webkit-scrollbar { width: 4px; }
   #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  .msg-row { display: flex; padding: 0 22px 18px; gap: 11px; }
+  .msg-row { display: flex; padding: 0 20px 16px; gap: 10px; }
   .msg-row.user { flex-direction: row-reverse; }
   .avatar { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; background: var(--surface2); border: 1px solid var(--border); }
   .msg-row.user .avatar { background: var(--accent); border-color: var(--accent); }
-  .bubble-wrap { max-width: 76%; display: flex; flex-direction: column; gap: 7px; }
+  .bubble-wrap { max-width: 76%; display: flex; flex-direction: column; gap: 6px; }
   .msg-row.user .bubble-wrap { align-items: flex-end; }
   .bubble { padding: 11px 15px; border-radius: 14px; font-size: 14px; line-height: 1.65; background: var(--surface); border: 1px solid var(--border); word-break: break-word; }
   .msg-row.user .bubble { background: var(--accent); border-color: var(--accent); color: #fff; border-radius: 14px 4px 14px 14px; }
@@ -93,7 +65,7 @@
   .bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child { margin-top: 0; }
   .bubble p { margin-bottom: 7px; } .bubble p:last-child { margin-bottom: 0; }
   .bubble ul,.bubble ol { padding-left: 18px; margin-bottom: 7px; } .bubble li { margin-bottom: 3px; }
-  .bubble strong { color: var(--text); font-weight: 700; } .bubble em { color: var(--text2); }
+  .bubble strong { font-weight: 700; } .bubble em { color: var(--text2); }
   .bubble code { background: rgba(37,99,235,.1); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; color: var(--accent); }
   .bubble pre { background: #f8fafc; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 7px 0; border: 1px solid var(--border); }
   .bubble pre code { background: none; padding: 0; color: var(--text); }
@@ -104,15 +76,15 @@
   .bubble hr { border: none; border-top: 1px solid var(--border); margin: 9px 0; }
 
   /* Tool cards */
-  .tool-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; background: var(--surface2); max-width: 76%; margin-left: 43px; margin-bottom: 7px; }
-  .tool-card-header { display: flex; align-items: center; gap: 8px; padding: 8px 13px; background: var(--surface2); cursor: pointer; }
+  .tool-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; background: var(--surface2); max-width: 76%; margin-left: 42px; margin-bottom: 6px; }
+  .tool-card-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); cursor: pointer; border-bottom: 1px solid transparent; transition: background .15s; }
+  .tool-card-header:hover { background: var(--surface2); }
+  .tool-card-header.open { border-bottom-color: var(--border); }
   .tc-icon { font-size: 14px; }
-  .tc-name { flex: 1; }
-  .tc-name-cn { font-weight: 600; font-size: 12px; color: var(--text); }
-  .tc-name-en { font-size: 10px; color: var(--text3); }
-  .tc-chevron { color: var(--text2); transition: transform .2s; font-size: 11px; }
+  .tc-name { flex: 1; font-size: 12px; font-weight: 600; color: var(--text); }
+  .tc-chevron { color: var(--text3); transition: transform .2s; font-size: 10px; }
   .tool-card-header.open .tc-chevron { transform: rotate(180deg); }
-  .tool-card-body { padding: 11px 13px; border-top: 1px solid var(--border); display: none; }
+  .tool-card-body { padding: 11px 13px; display: none; }
   .tool-card-body.open { display: block; }
 
   /* Lab table */
@@ -125,16 +97,16 @@
 
   /* Score cards */
   .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 7px; }
-  .score-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
-  .sc-label-cn { font-size: 11px; color: var(--text2); } .sc-label-en { font-size: 10px; color: var(--text3); }
+  .score-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; }
+  .sc-label { font-size: 11px; color: var(--text2); }
   .sc-value { font-size: 20px; font-weight: 700; margin: 3px 0; }
   .sc-sub { font-size: 11px; color: var(--text2); }
   .grade-A,.grade-1 { color: var(--accent2); } .grade-B,.grade-2 { color: var(--warn); } .grade-C,.grade-3 { color: var(--danger); }
 
   /* Urgent */
   .urgent-banner { border-radius: 8px; padding: 9px 13px; margin-bottom: 7px; border-left: 3px solid; }
-  .urgent-banner.CRITICAL { background: rgba(242,92,84,.12); border-color: var(--danger); }
-  .urgent-banner.URGENT { background: rgba(245,166,35,.1); border-color: var(--warn); }
+  .urgent-banner.CRITICAL { background: rgba(220,38,38,.08); border-color: var(--danger); }
+  .urgent-banner.URGENT { background: rgba(217,119,6,.08); border-color: var(--warn); }
   .ub-title { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; }
   .urgent-banner.CRITICAL .ub-title { color: var(--danger); } .urgent-banner.URGENT .ub-title { color: var(--warn); }
   .ub-action { font-size: 12px; color: var(--text2); margin-top: 3px; }
@@ -147,316 +119,215 @@
   .ddx-name { flex: 1; font-size: 13px; font-weight: 500; }
   .ddx-steps { font-size: 11px; color: var(--text2); margin-top: 2px; }
   .ddx-prob { font-size: 11px; padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
-  .prob-high { background: rgba(242,92,84,.15); color: var(--danger); }
-  .prob-moderate { background: rgba(245,166,35,.15); color: var(--warn); }
+  .prob-high { background: rgba(220,38,38,.12); color: var(--danger); }
+  .prob-moderate { background: rgba(217,119,6,.12); color: var(--warn); }
   .prob-low { background: var(--surface2); color: var(--text2); }
 
   /* Fibrosis */
   .fibrosis-bar { display: flex; gap: 3px; margin: 9px 0 5px; }
   .fb-seg { flex: 1; height: 8px; border-radius: 3px; background: var(--border); }
-  .fb-seg.active-F0 { background: #38c9a0; } .fb-seg.active-F1 { background: #7ec8b0; }
-  .fb-seg.active-F2 { background: var(--warn); } .fb-seg.active-F3 { background: #f07b42; } .fb-seg.active-F4 { background: var(--danger); }
+  .fb-seg.active-F0 { background: #059669; } .fb-seg.active-F1 { background: #34d399; }
+  .fb-seg.active-F2 { background: var(--warn); } .fb-seg.active-F3 { background: #f97316; } .fb-seg.active-F4 { background: var(--danger); }
   .fb-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); }
 
   /* Thinking */
-  .thinking { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; color: var(--text2); max-width: 76%; margin-left: 43px; }
+  .thinking { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; color: var(--text2); max-width: 76%; margin-left: 42px; }
   .thinking-dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin: 0 1px; animation: bounce .9s infinite; }
   .thinking-dots span:nth-child(2) { animation-delay: .15s; } .thinking-dots span:nth-child(3) { animation-delay: .3s; }
   @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
 
   /* Welcome */
   .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 20px; padding: 40px; text-align: center; }
-  .welcome-icon { font-size: 60px; }
-  .welcome h2 { font-size: 22px; font-weight: 700; }
-  .welcome h2 .en { display: block; font-size: 14px; font-weight: 400; color: var(--text2); margin-top: 4px; }
-  .welcome p { font-size: 13px; color: var(--text2); max-width: 460px; line-height: 1.7; }
-  .welcome p .en { display: block; font-size: 12px; color: var(--text3); margin-top: 3px; }
-  .welcome-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; max-width: 540px; }
-  .chip { padding: 6px 13px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text2); cursor: pointer; transition: all .15s; }
-  .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(37,99,235,.07); }
-  .chip .en { font-size: 10px; color: var(--text3); display: block; margin-top: 1px; }
+  .welcome-icon { font-size: 56px; }
+  .welcome h2 { font-size: 24px; font-weight: 700; color: var(--text); }
+  .welcome p { font-size: 14px; color: var(--text2); max-width: 500px; line-height: 1.7; }
+  .welcome-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; max-width: 560px; }
+  .chip { padding: 7px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text2); cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(37,99,235,.06); }
 
   /* Input */
-  .input-area { padding: 14px 22px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .input-area { padding: 14px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
   .input-row { display: flex; gap: 9px; align-items: flex-end; }
   #user-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 15px; color: var(--text); font-size: 14px; font-family: var(--font); resize: none; outline: none; line-height: 1.5; max-height: 160px; min-height: 46px; transition: border-color .15s; }
   #user-input:focus { border-color: var(--accent); }
   #user-input::placeholder { color: var(--text3); }
-  #send-btn { width: 44px; height: 44px; border-radius: 11px; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s; font-size: 17px; }
+  #send-btn { width: 44px; height: 44px; border-radius: 11px; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s; font-size: 17px; color: white; }
   #send-btn:disabled { opacity: .4; cursor: not-allowed; }
   #send-btn:not(:disabled):hover { opacity: .85; }
+  #upload-btn { width: 44px; height: 44px; border-radius: 11px; background: var(--surface2); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .15s; font-size: 18px; }
+  #upload-btn:hover { border-color: var(--accent); background: rgba(37,99,235,.07); }
+  #file-input { display: none; }
+  .image-preview { position: relative; display: inline-block; margin-bottom: 8px; }
+  .image-preview img { max-height: 120px; max-width: 260px; border-radius: 8px; border: 2px solid var(--accent); object-fit: cover; }
+  .image-preview .remove-img { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--danger); border: none; cursor: pointer; color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; }
   .input-hint { font-size: 11px; color: var(--text3); margin-top: 5px; text-align: right; }
-
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 </style>
 </head>
-<body class="lang-zh">
+<body>
 
 <header>
   <div class="logo">
     <span class="logo-icon">🔬</span>
-    HepatoAI
-    <div class="logo-sub">
-      <span class="cn">肝病临床决策支持</span>
-      <span class="en">Liver Disease Clinical AI</span>
-    </div>
+    <span class="logo-title">HepatoAI</span>
+    <span class="logo-sub">Liver Disease Clinical Decision Support · Physician Mode</span>
   </div>
   <div class="header-right">
     <div id="usage-display" class="usage-pill" style="display:none">
-      Tokens: <span id="usage-val">0</span> · Cache: <span id="cache-val">0</span>
+      Tokens: <span id="usage-val">0</span>
     </div>
-    <!-- Language -->
-    <div class="toggle-group">
-      <button class="tg-btn lang-active" id="btn-zh" onclick="setLang('zh')">中文</button>
-      <button class="tg-btn" id="btn-en" onclick="setLang('en')">English</button>
-    </div>
-    <!-- Mode -->
-    <div class="toggle-group">
-      <button class="tg-btn active" id="btn-physician" onclick="setMode('physician')">
-        <span id="mode-label-phys">👨‍⚕️ 医生</span>
-      </button>
-      <button class="tg-btn" id="btn-patient" onclick="setMode('patient')">
-        <span id="mode-label-pat">🏥 患者</span>
-      </button>
-    </div>
-    <button class="btn-clear" id="btn-clear" onclick="clearChat()">清除对话</button>
+    <button class="btn-clear" onclick="clearChat()">Clear Chat</button>
   </div>
 </header>
 
 <div class="main">
-  <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar-title"><span class="cn">快速案例</span><span class="en">Quick Cases</span></div>
+    <div class="sb-section">Quick Cases</div>
     <div class="quick-btns">
-      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="患者45岁男性，HBV感染10年，出现腹水、黄疸。化验：ALT 85 U/L，AST 120 U/L，胆红素 4.2 mg/dL，白蛋白 2.8 g/dL，INR 1.9，肌酐 1.4，血小板 85，AFP 45，HBsAg阳性，HBV DNA 50000 IU/mL。超声：肝脏结节状，脾大，中量腹水。" data-q-en="45-year-old male with 10-year HBV infection presenting with ascites and jaundice. Labs: ALT 85, AST 120, total bilirubin 4.2 mg/dL, albumin 2.8 g/dL, INR 1.9, creatinine 1.4, platelets 85k, AFP 45 ng/mL, HBsAg positive, HBV DNA 50,000 IU/mL. Ultrasound: nodular liver, splenomegaly, moderate ascites.">
-        <span class="qb-icon">🦠</span>
-        <div>
-          <div class="qb-cn">HBV 肝硬化</div>
-          <div class="qb-en">HBV Cirrhosis</div>
-          <div class="qb-sub-cn">45岁男，腹水+黄疸</div>
-          <div class="qb-sub-en">M45, ascites + jaundice</div>
-        </div>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="45-year-old male, 10-year HBV infection, presenting with ascites and jaundice. Labs: ALT 85, AST 120, total bilirubin 4.2 mg/dL, albumin 2.8 g/dL, INR 1.9, creatinine 1.4, platelets 85k, AFP 45 ng/mL, HBsAg positive, HBV DNA 50,000 IU/mL. Ultrasound: nodular liver, splenomegaly, moderate ascites.">
+        <span class="qb-icon">🦠</span><div><div class="qb-title">HBV Cirrhosis</div><div class="qb-sub">M45, ascites + jaundice</div></div>
       </button>
-      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="女性52岁，肥胖（BMI 32），2型糖尿病，血脂异常。ALT 68，AST 52，GGT 95，ALP 120 U/L。超声：中度脂肪肝，回声增强。否认饮酒。" data-q-en="52-year-old female, obese (BMI 32), type 2 diabetes, dyslipidemia. ALT 68, AST 52, GGT 95, ALP 120 U/L. Ultrasound: moderate hepatic steatosis with increased echogenicity. No alcohol use.">
-        <span class="qb-icon">🫀</span>
-        <div>
-          <div class="qb-cn">NAFLD / NASH</div>
-          <div class="qb-en">NAFLD / NASH</div>
-          <div class="qb-sub-cn">52岁女，代谢综合征</div>
-          <div class="qb-sub-en">F52, metabolic syndrome</div>
-        </div>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="52-year-old female, obese (BMI 32), T2DM, dyslipidemia. ALT 68, AST 52, GGT 95, ALP 120 U/L. Ultrasound: moderate hepatic steatosis with increased echogenicity. No alcohol use.">
+        <span class="qb-icon">🫀</span><div><div class="qb-title">NAFLD / NASH</div><div class="qb-sub">F52, metabolic syndrome</div></div>
       </button>
-      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="男性28岁，HCV抗体阳性，HCV RNA 2,500,000 IU/mL，基因型1b。ALT 95，AST 78，血小板 185，白蛋白 4.1，INR 1.0，Fibroscan 8.2 kPa。" data-q-en="28-year-old male, HCV Ab positive, HCV RNA 2,500,000 IU/mL, genotype 1b. ALT 95, AST 78, platelets 185k, albumin 4.1 g/dL, INR 1.0, Fibroscan 8.2 kPa.">
-        <span class="qb-icon">💉</span>
-        <div>
-          <div class="qb-cn">丙型肝炎</div>
-          <div class="qb-en">Hepatitis C</div>
-          <div class="qb-sub-cn">28岁男，GT1b</div>
-          <div class="qb-sub-en">M28, genotype 1b</div>
-        </div>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="28-year-old male, HCV Ab positive, HCV RNA 2,500,000 IU/mL, genotype 1b. ALT 95, AST 78, platelets 185k, albumin 4.1, INR 1.0, Fibroscan 8.2 kPa.">
+        <span class="qb-icon">💉</span><div><div class="qb-title">Hepatitis C</div><div class="qb-sub">M28, GT1b, Fibroscan 8.2 kPa</div></div>
       </button>
-      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="男性38岁，急性起病1周，无既往肝病史。黄疸、意识模糊。ALT 2800，AST 3200，总胆红素 15 mg/dL，INR 2.8，肌酐 1.8。服用对乙酰氨基酚过量史。" data-q-en="38-year-old male, acute onset 1 week, no prior liver disease. Jaundice and confusion. ALT 2800, AST 3200, total bilirubin 15 mg/dL, INR 2.8, creatinine 1.8. History of acetaminophen overdose.">
-        <span class="qb-icon">🚨</span>
-        <div>
-          <div class="qb-cn">急性肝衰竭</div>
-          <div class="qb-en">Acute Liver Failure</div>
-          <div class="qb-sub-cn">对乙酰氨基酚中毒</div>
-          <div class="qb-sub-en">Acetaminophen overdose</div>
-        </div>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="38-year-old male, acute onset 1 week, no prior liver disease. Jaundice and confusion. ALT 2800, AST 3200, total bilirubin 15 mg/dL, INR 2.8, creatinine 1.8. History of acetaminophen overdose.">
+        <span class="qb-icon">🚨</span><div><div class="qb-title">Acute Liver Failure</div><div class="qb-sub">Acetaminophen overdose</div></div>
       </button>
-      <button class="quick-btn" onclick="quickQuery(this)" data-q-zh="女性35岁，乏力、黄疸2个月，无病毒性肝炎。ALT 320，AST 280，IgG 2400 mg/dL，ANA 1:320阳性，ASMA阳性。" data-q-en="35-year-old female, fatigue and jaundice 2 months, no viral hepatitis. ALT 320, AST 280, IgG 2400 mg/dL, ANA 1:320 positive, ASMA positive.">
-        <span class="qb-icon">🔬</span>
-        <div>
-          <div class="qb-cn">自身免疫性肝炎</div>
-          <div class="qb-en">Autoimmune Hepatitis</div>
-          <div class="qb-sub-cn">35岁女，高IgG+ANA阳性</div>
-          <div class="qb-sub-en">F35, elevated IgG + ANA+</div>
-        </div>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="35-year-old female, fatigue and jaundice 2 months, no viral hepatitis. ALT 320, AST 280, IgG 2400 mg/dL, ANA 1:320 positive, ASMA positive.">
+        <span class="qb-icon">🔬</span><div><div class="qb-title">Autoimmune Hepatitis</div><div class="qb-sub">F35, elevated IgG, ANA+</div></div>
+      </button>
+      <button class="quick-btn" onclick="quickQuery(this.dataset.q)" data-q="50-year-old male, heavy alcohol use (8 drinks/day), presenting with jaundice, fever, tender hepatomegaly. ALT 180, AST 420 (AST:ALT ratio >2), GGT 380, bilirubin 12 mg/dL, WBC 18k, PT 22 sec.">
+        <span class="qb-icon">🍺</span><div><div class="qb-title">Alcoholic Hepatitis</div><div class="qb-sub">M50, severe, MDF assessment</div></div>
       </button>
     </div>
-    <div class="sidebar-div"></div>
-    <div class="sidebar-title"><span class="cn">可用工具</span><span class="en">Tools</span></div>
+    <div class="sb-div"></div>
+    <div class="sb-section">Clinical Tools</div>
     <div class="tools-list" id="tools-status">
-      <div class="tool-item" data-tool="parse_lab_values"><div class="tool-dot"></div><div><span class="tool-cn">🧪 化验值解析</span><span class="tool-en">Lab Value Parser</span></div></div>
-      <div class="tool-item" data-tool="calculate_severity_scores"><div class="tool-dot"></div><div><span class="tool-cn">📊 严重程度评分</span><span class="tool-en">Severity Scoring (Child-Pugh/MELD)</span></div></div>
-      <div class="tool-item" data-tool="differential_diagnosis"><div class="tool-dot"></div><div><span class="tool-cn">🔍 鉴别诊断</span><span class="tool-en">Differential Diagnosis</span></div></div>
-      <div class="tool-item" data-tool="assess_fibrosis_stage"><div class="tool-dot"></div><div><span class="tool-cn">📈 纤维化分期</span><span class="tool-en">Fibrosis Staging</span></div></div>
-      <div class="tool-item" data-tool="get_treatment_guidelines"><div class="tool-dot"></div><div><span class="tool-cn">💊 治疗指南</span><span class="tool-en">Treatment Guidelines</span></div></div>
-      <div class="tool-item" data-tool="generate_clinical_summary"><div class="tool-dot"></div><div><span class="tool-cn">📋 临床总结</span><span class="tool-en">Clinical Summary</span></div></div>
-      <div class="tool-item" data-tool="flag_urgent_findings"><div class="tool-dot"></div><div><span class="tool-cn">🚨 紧急情况筛查</span><span class="tool-en">Urgent Findings</span></div></div>
+      <div class="tool-item" data-tool="parse_lab_values"><div class="tool-dot"></div>🧪 Lab Value Parser</div>
+      <div class="tool-item" data-tool="calculate_severity_scores"><div class="tool-dot"></div>📊 Severity Scoring (Child-Pugh/MELD/ALBI)</div>
+      <div class="tool-item" data-tool="calculate_advanced_scores"><div class="tool-dot"></div>🔢 Advanced Scores (FIB-4/MELD3/MDF...)</div>
+      <div class="tool-item" data-tool="differential_diagnosis"><div class="tool-dot"></div>🔍 Differential Diagnosis</div>
+      <div class="tool-item" data-tool="assess_fibrosis_stage"><div class="tool-dot"></div>📈 Fibrosis Staging</div>
+      <div class="tool-item" data-tool="get_treatment_guidelines"><div class="tool-dot"></div>💊 Treatment Guidelines</div>
+      <div class="tool-item" data-tool="generate_clinical_summary"><div class="tool-dot"></div>📋 Clinical Summary</div>
+      <div class="tool-item" data-tool="flag_urgent_findings"><div class="tool-dot"></div>🚨 Urgent Findings</div>
     </div>
   </aside>
 
-  <!-- Chat -->
   <div class="chat-area">
     <div id="messages">
       <div id="welcome" class="welcome">
         <div class="welcome-icon">🫁</div>
-        <h2>
-          <span class="cn">HepatoAI 肝病决策支持</span>
-          <span class="en">HepatoAI Liver Disease Clinical AI</span>
-        </h2>
-        <p>
-          <span class="cn">输入病历、化验结果或临床问题，AI 将自动分析并提供基于 AASLD/EASL 指南的临床建议。</span>
-          <span class="en">Enter clinical notes, lab results, or questions. AI will analyze and provide evidence-based recommendations per AASLD/EASL guidelines.</span>
-        </p>
+        <h2>HepatoAI Clinical Decision Support</h2>
+        <p>Enter clinical notes, lab results, imaging findings, or pathology reports. The AI will automatically analyze and provide evidence-based hepatology recommendations grounded in AASLD &amp; EASL guidelines.</p>
         <div class="welcome-chips">
-          <div class="chip" data-q-zh="Child-Pugh评分如何计算？" data-q-en="How is the Child-Pugh score calculated?" onclick="quickChip(this)">
-            <span class="cn">Child-Pugh 评分</span><span class="en">Child-Pugh Score</span>
-          </div>
-          <div class="chip" data-q-zh="HBV肝硬化的HCC监测方案？" data-q-en="What is the HCC surveillance protocol in HBV cirrhosis?" onclick="quickChip(this)">
-            <span class="cn">HCC 监测</span><span class="en">HCC Surveillance</span>
-          </div>
-          <div class="chip" data-q-zh="急性肝衰竭的紧急处理？" data-q-en="How to manage acute liver failure emergently?" onclick="quickChip(this)">
-            <span class="cn">急性肝衰竭</span><span class="en">Acute Liver Failure</span>
-          </div>
-          <div class="chip" data-q-zh="DAA治疗丙肝的方案？" data-q-en="What are the DAA regimens for HCV treatment?" onclick="quickChip(this)">
-            <span class="cn">HCV DAA 方案</span><span class="en">HCV DAA Regimens</span>
-          </div>
-          <div class="chip" data-q-zh="NAFLD/NASH如何治疗？" data-q-en="How to treat NAFLD/NASH?" onclick="quickChip(this)">
-            <span class="cn">NAFLD 治疗</span><span class="en">NAFLD Treatment</span>
-          </div>
-          <div class="chip" data-q-zh="静脉曲张破裂出血的处理？" data-q-en="How to manage variceal hemorrhage?" onclick="quickChip(this)">
-            <span class="cn">静脉曲张出血</span><span class="en">Variceal Hemorrhage</span>
-          </div>
+          <div class="chip" onclick="quickQuery('How is Child-Pugh score calculated and what does each grade mean?')">Child-Pugh Scoring</div>
+          <div class="chip" onclick="quickQuery('What is the HCC surveillance protocol in cirrhotic patients?')">HCC Surveillance</div>
+          <div class="chip" onclick="quickQuery('How to manage acute variceal hemorrhage per Baveno VII?')">Variceal Hemorrhage</div>
+          <div class="chip" onclick="quickQuery('What are the current DAA regimens for HCV treatment (AASLD 2023)?')">HCV DAA Regimens</div>
+          <div class="chip" onclick="quickQuery('MELD 3.0 formula and how does it differ from MELD-Na?')">MELD 3.0</div>
+          <div class="chip" onclick="quickQuery('Management of spontaneous bacterial peritonitis including albumin dosing')">SBP Management</div>
+          <div class="chip" onclick="quickQuery('Terlipressin dosing for hepatorenal syndrome — FDA 2022 approval')">HRS / Terlipressin</div>
+          <div class="chip" onclick="quickQuery('BCLC staging and systemic therapy options for advanced HCC')">HCC Staging &amp; Treatment</div>
         </div>
       </div>
     </div>
 
     <div class="input-area">
+      <div id="preview-area" style="display:none" class="image-preview">
+        <img id="preview-img" src="" alt="preview"/>
+        <button class="remove-img" onclick="removeImage()" title="Remove image">×</button>
+      </div>
       <div class="input-row">
-        <textarea id="user-input" placeholder="输入病历、化验结果或临床问题 / Enter clinical notes, lab results, or questions..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="upload-btn" onclick="document.getElementById('file-input').click()" title="Upload CT / MRI / imaging">🩻</button>
+        <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)"/>
+        <textarea id="user-input" placeholder="Enter clinical notes, lab values, or questions — or upload a CT/MRI image 🩻" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button id="send-btn" onclick="sendMessage()" title="Send (Enter)">➤</button>
       </div>
-      <div class="input-hint" id="input-hint">Enter 发送 / Send · Shift+Enter 换行 / New line</div>
+      <div class="input-hint">Enter to send · Shift+Enter for new line · 🩻 Upload CT/MRI/Ultrasound image</div>
     </div>
   </div>
 </div>
 
 <script>
-// ── i18n ──
-const T = {
-  zh: {
-    mode_phys: '👨‍⚕️ 医生', mode_pat: '🏥 患者', clear: '清除对话',
-    thinking: 'HepatoAI 正在分析...',
-    hint: 'Enter 发送 · Shift+Enter 换行',
-    no_urgent: '✓ 未发现危急/紧急情况',
-    no_labs: '未提取到化验值',
-    no_scores: '数据不足，无法计算评分',
-    no_ddx: '无法生成鉴别诊断',
-    render_err: '渲染错误',
-    first_line: '一线治疗',
-    goals: '治疗目标',
-    source: '来源',
-    prob: { high:'高概率', moderate:'中概率', low:'低概率' },
-    status: { normal:'✓ 正常', high:'↑ 偏高', low:'↓ 偏低', critical_high:'⚠ 危急↑', critical_low:'⚠ 危急↓', abnormal:'⚠ 异常' },
-    missing: '缺少',
-    tool_labels: {
-      parse_lab_values: ['化验值解析', 'Lab Value Parser'],
-      calculate_severity_scores: ['严重程度评分', 'Severity Scoring'],
-      differential_diagnosis: ['鉴别诊断', 'Differential Diagnosis'],
-      assess_fibrosis_stage: ['纤维化分期', 'Fibrosis Staging'],
-      get_treatment_guidelines: ['治疗指南', 'Treatment Guidelines'],
-      generate_clinical_summary: ['临床总结', 'Clinical Summary'],
-      flag_urgent_findings: ['紧急情况筛查', 'Urgent Findings'],
-    },
-  },
-  en: {
-    mode_phys: '👨‍⚕️ Physician', mode_pat: '🏥 Patient', clear: 'Clear Chat',
-    thinking: 'HepatoAI is analyzing...',
-    hint: 'Enter to send · Shift+Enter for new line',
-    no_urgent: '✓ No urgent or critical findings identified',
-    no_labs: 'No lab values extracted',
-    no_scores: 'Insufficient data for scoring',
-    no_ddx: 'Unable to generate differential diagnosis',
-    render_err: 'Render error',
-    first_line: 'First-Line Treatment',
-    goals: 'Treatment Goals',
-    source: 'Source',
-    prob: { high:'High', moderate:'Moderate', low:'Low' },
-    status: { normal:'✓ Normal', high:'↑ High', low:'↓ Low', critical_high:'⚠ CRIT↑', critical_low:'⚠ CRIT↓', abnormal:'⚠ Abnormal' },
-    missing: 'Missing',
-    tool_labels: {
-      parse_lab_values: ['Lab Value Parser', '化验值解析'],
-      calculate_severity_scores: ['Severity Scoring (Child-Pugh/MELD/ALBI)', '严重程度评分'],
-      differential_diagnosis: ['Differential Diagnosis', '鉴别诊断'],
-      assess_fibrosis_stage: ['Fibrosis Staging', '纤维化分期'],
-      get_treatment_guidelines: ['Treatment Guidelines', '治疗指南'],
-      generate_clinical_summary: ['Clinical Summary', '临床总结'],
-      flag_urgent_findings: ['Urgent Findings', '紧急情况筛查'],
-    },
-  },
+// ── Constants ──
+const ICONS = {
+  parse_lab_values:'🧪', calculate_severity_scores:'📊', differential_diagnosis:'🔍',
+  assess_fibrosis_stage:'📈', get_treatment_guidelines:'💊', generate_clinical_summary:'📋',
+  flag_urgent_findings:'🚨', calculate_advanced_scores:'🔢', imaging_analysis:'🩻',
+  calculate_amap_hcc_risk:'🎯', assess_baveno_csph:'🔭', predict_masld_advanced_fibrosis:'📐',
+  calculate_additional_clinical_scores:'⚕️',
+};
+const TOOL_LABELS = {
+  parse_lab_values: 'Lab Value Parser',
+  calculate_severity_scores: 'Severity Scoring (Child-Pugh / MELD 3.0 / ALBI)',
+  differential_diagnosis: 'Differential Diagnosis',
+  assess_fibrosis_stage: 'Fibrosis Staging',
+  get_treatment_guidelines: 'Treatment Guidelines',
+  generate_clinical_summary: 'Clinical Summary',
+  flag_urgent_findings: 'Urgent Findings',
+  calculate_advanced_scores: 'Advanced Scores (FIB-4 / MELD 3.0 / MDF / Lille...)',
+  imaging_analysis: 'Imaging Analysis (GPT-4o)',
+  calculate_amap_hcc_risk: 'aMAP — HCC Annual Risk (All Etiologies)',
+  assess_baveno_csph: 'Baveno VII — Portal Hypertension / EGD Decision',
+  predict_masld_advanced_fibrosis: 'MASLD Advanced Fibrosis Predictor',
+  calculate_additional_clinical_scores: 'Additional Scores (eGFR / HAS-BLED / SOFA)',
 };
 
 // ── State ──
-let sessionId = null, mode = 'physician', lang = 'zh';
-let totalTokens = 0, cacheTokens = 0, isStreaming = false;
+let sessionId = null, isStreaming = false;
 let currentAiBubble = null, currentAiText = '';
-
-const ICONS = { parse_lab_values:'🧪', calculate_severity_scores:'📊', differential_diagnosis:'🔍', assess_fibrosis_stage:'📈', get_treatment_guidelines:'💊', generate_clinical_summary:'📋', flag_urgent_findings:'🚨' };
+let totalTokens = 0;
+let pendingImageB64 = '';
+let pendingImageType = 'jpeg';
 
 async function init() {
-  // body already has lang-zh from HTML; just ensure it
-  if (!document.body.classList.contains('lang-zh') && !document.body.classList.contains('lang-en')) {
-    document.body.classList.add('lang-zh');
-  }
-  const r = await fetch('/api/session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode}) });
+  const r = await fetch('/api/session', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode:'physician'}) });
   sessionId = (await r.json()).session_id;
 }
 init();
 
-// ── Lang ──
-function setLang(l) {
-  lang = l;
-  // Toggle body class — CSS handles all .cn / .en visibility
-  document.body.classList.remove('lang-zh', 'lang-en');
-  document.body.classList.add('lang-' + l);
-  document.getElementById('btn-zh').classList.toggle('lang-active', l === 'zh');
-  document.getElementById('btn-en').classList.toggle('lang-active', l === 'en');
-  const t = T[lang];
-  document.getElementById('mode-label-phys').textContent = t.mode_phys;
-  document.getElementById('mode-label-pat').textContent = t.mode_pat;
-  document.getElementById('btn-clear').textContent = t.clear;
-  document.getElementById('input-hint').textContent = t.hint;
-  document.getElementById('user-input').placeholder = l === 'en'
-    ? 'Enter clinical notes, lab results, or questions...'
-    : '输入病历、化验结果或临床问题...';
-  document.title = l === 'en'
-    ? 'HepatoAI — Liver Disease Clinical AI'
-    : 'HepatoAI — 肝病临床决策支持';
-}
-
-// ── Mode ──
-function setMode(m) {
-  mode = m;
-  document.getElementById('btn-physician').classList.toggle('active', m === 'physician');
-  document.getElementById('btn-patient').classList.toggle('active', m === 'patient');
-}
-
-// ── Clear ──
 async function clearChat() {
   if (sessionId) await fetch(`/api/session/${sessionId}`, { method:'DELETE' });
   location.reload();
 }
 
-function quickQuery(btn) {
-  const q = lang === 'en' ? (btn.dataset.qEn || btn.dataset['q-en']) : (btn.dataset.qZh || btn.dataset['q-zh']);
-  document.getElementById('user-input').value = q || btn.dataset.q || '';
-  sendMessage();
-}
-function quickText(t) {
-  document.getElementById('user-input').value = t;
-  sendMessage();
-}
-function quickChip(btn) {
-  const q = lang === 'en' ? btn.dataset.qEn : btn.dataset.qZh;
-  document.getElementById('user-input').value = q || '';
+function quickQuery(q) {
+  document.getElementById('user-input').value = q;
   sendMessage();
 }
 
 function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
 function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  pendingImageType = file.type.split('/')[1] || 'jpeg';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    pendingImageB64 = dataUrl.split(',')[1]; // strip "data:image/...;base64,"
+    document.getElementById('preview-img').src = dataUrl;
+    document.getElementById('preview-area').style.display = 'inline-block';
+    document.getElementById('upload-btn').style.borderColor = 'var(--accent)';
+    document.getElementById('upload-btn').style.background = 'rgba(37,99,235,.1)';
+  };
+  reader.readAsDataURL(file);
+  event.target.value = ''; // reset so same file can be re-selected
+}
+
+function removeImage() {
+  pendingImageB64 = '';
+  pendingImageType = 'jpeg';
+  document.getElementById('preview-area').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('upload-btn').style.borderColor = '';
+  document.getElementById('upload-btn').style.background = '';
+}
 
 // ── Send ──
 async function sendMessage() {
@@ -468,8 +339,27 @@ async function sendMessage() {
   inp.value = ''; inp.style.height = 'auto';
   const w = document.getElementById('welcome'); if (w) w.remove();
   appendUserMsg(msg); showThinking(); resetToolsUI();
+
   try {
-    const resp = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: msg, session_id: sessionId, mode, lang }) });
+    // Show image in chat if attached
+    if (pendingImageB64) {
+      appendImageToChat(document.getElementById('preview-img').src);
+    }
+
+    const resp = await fetch('/api/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        message: msg,
+        session_id: sessionId,
+        mode: 'physician',
+        lang: 'en',
+        image_b64: pendingImageB64,
+        image_type: pendingImageType,
+      }),
+    });
+
+    // Clear image after sending
+    removeImage();
     const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
@@ -485,25 +375,28 @@ async function sendMessage() {
     }
   } catch (e) { removeThinking(); appendError('Connection error: ' + e.message); }
   removeThinking(); finaliseAiBubble();
-  isStreaming = false; document.getElementById('send-btn').disabled = false; inp.focus();
+  isStreaming = false; document.getElementById('send-btn').disabled = false;
+  document.getElementById('user-input').focus();
 }
 
 function handleEvent(event, data) {
-  const t = T[lang];
   if (event === 'text') {
-    removeThinking(); if (!currentAiBubble) startAiBubble();
+    // Accumulate text but don't show bubble — it goes into Summary section of clinical report
     currentAiText += data.content;
-    currentAiBubble.innerHTML = renderMarkdown(currentAiText); scrollBottom();
   } else if (event === 'tool_start') {
     removeThinking(); activateTool(data.name);
-    const lbl = t.tool_labels[data.name]; showThinking(ICONS[data.name] + ' ' + (lbl ? lbl[0] : data.name) + '...');
+    showThinking((ICONS[data.name]||'⚙️') + ' ' + (TOOL_LABELS[data.name]||data.name) + '...');
   } else if (event === 'tool_result') {
-    removeThinking(); renderToolCard(data.name, data.result);
+    removeThinking();
+    // Only show imaging analysis as a card; other tools shown in final report
+    if (data.name === 'imaging_analysis') renderToolCard(data.name, data.result);
+    else activateTool(data.name); // just light up sidebar
+  } else if (event === 'clinical_report') {
+    removeThinking(); renderClinicalReport(data);
   } else if (event === 'usage') {
-    totalTokens += (data.input_tokens||0) + (data.output_tokens||0); cacheTokens += (data.cache_read||0);
+    totalTokens += (data.input_tokens||0) + (data.output_tokens||0);
     document.getElementById('usage-display').style.display = '';
     document.getElementById('usage-val').textContent = totalTokens.toLocaleString();
-    document.getElementById('cache-val').textContent = cacheTokens.toLocaleString();
   } else if (event === 'done') { removeThinking(); finaliseAiBubble(); }
 }
 
@@ -519,20 +412,32 @@ function appendUserMsg(text) {
   row.innerHTML = `<div class="avatar">👤</div><div class="bubble-wrap"><div class="bubble">${escHtml(text)}</div></div>`;
   msgs.appendChild(row); scrollBottom();
 }
-function appendError(msg) { const d = document.createElement('div'); d.style.cssText = 'text-align:center;color:#f25c54;font-size:13px;padding:8px 24px'; d.textContent = msg; document.getElementById('messages').appendChild(d); }
+function appendError(msg) { const d = document.createElement('div'); d.style.cssText = 'text-align:center;color:#dc2626;font-size:13px;padding:8px 24px'; d.textContent = msg; document.getElementById('messages').appendChild(d); }
+
+function appendImageToChat(dataUrl) {
+  const msgs = document.getElementById('messages');
+  const row = document.createElement('div'); row.className = 'msg-row user';
+  row.innerHTML = `<div class="avatar">👤</div>
+    <div class="bubble-wrap">
+      <div style="background:var(--accent);border-radius:14px 4px 14px 14px;padding:6px;display:inline-block">
+        <img src="${dataUrl}" style="max-height:180px;max-width:260px;border-radius:10px;display:block"/>
+      </div>
+    </div>`;
+  msgs.appendChild(row); scrollBottom();
+}
 
 function showThinking(label) {
   removeThinking();
   const d = document.createElement('div'); d.id = 'thinking-indicator'; d.className = 'thinking';
-  d.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>${label || T[lang].thinking}</span>`;
+  d.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>${label||'HepatoAI is analyzing...'}</span>`;
   document.getElementById('messages').appendChild(d); scrollBottom();
 }
 function removeThinking() { const el = document.getElementById('thinking-indicator'); if (el) el.remove(); }
 
 // ── Tool card rendering ──
 function renderToolCard(toolName, result) {
-  const t = T[lang]; const icon = ICONS[toolName] || '⚙️';
-  const lbl = t.tool_labels[toolName] || [toolName, toolName];
+  const icon = ICONS[toolName] || '⚙️';
+  const label = TOOL_LABELS[toolName] || toolName;
   const card = document.createElement('div'); card.className = 'tool-card';
   let bodyHTML = '';
   try {
@@ -542,61 +447,67 @@ function renderToolCard(toolName, result) {
     else if (toolName === 'differential_diagnosis') bodyHTML = renderDDx(result);
     else if (toolName === 'assess_fibrosis_stage') bodyHTML = renderFibrosis(result);
     else if (toolName === 'get_treatment_guidelines') bodyHTML = renderTreatment(result);
-    else bodyHTML = `<pre style="font-size:11px;overflow:auto;white-space:pre-wrap">${escHtml(JSON.stringify(result, null, 2))}</pre>`;
-  } catch(e) { bodyHTML = `<span style="color:var(--danger)">${t.render_err}: ${escHtml(e.message)}</span>`; }
+    else if (toolName === 'generate_clinical_summary') bodyHTML = renderClinicalSummary(result);
+    else if (toolName === 'calculate_advanced_scores') bodyHTML = renderAdvancedScores(result);
+    else if (toolName === 'imaging_analysis') bodyHTML = renderImaging(result);
+    else if (toolName === 'calculate_amap_hcc_risk') bodyHTML = renderAmap(result);
+    else if (toolName === 'assess_baveno_csph') bodyHTML = renderBaveno(result);
+    else if (toolName === 'predict_masld_advanced_fibrosis') bodyHTML = renderMasldFibrosis(result);
+    else if (toolName === 'calculate_additional_clinical_scores') bodyHTML = renderAdditionalScores(result);
+    else bodyHTML = renderGeneric(result);
+  } catch(e) { bodyHTML = `<span style="color:var(--danger)">Render error: ${escHtml(e.message)}</span>`; }
 
+  const autoOpen = toolName === 'flag_urgent_findings' || toolName === 'imaging_analysis';
   card.innerHTML = `
-    <div class="tool-card-header open" onclick="toggleCard(this)">
+    <div class="tool-card-header ${autoOpen?'open':''}" onclick="toggleCard(this)">
       <span class="tc-icon">${icon}</span>
-      <div class="tc-name"><div class="tc-name-cn">${lbl[0]}</div><div class="tc-name-en">${lbl[1]}</div></div>
+      <span class="tc-name">${label}</span>
       <span class="tc-chevron">▼</span>
     </div>
-    <div class="tool-card-body open">${bodyHTML}</div>`;
+    <div class="tool-card-body ${autoOpen?'open':''}">${bodyHTML}</div>`;
   document.getElementById('messages').appendChild(card); scrollBottom();
 }
 function toggleCard(h) { h.classList.toggle('open'); h.nextElementSibling.classList.toggle('open'); }
 
+// ── Renderers ──
 function renderLabValues(r) {
-  const t = T[lang];
-  if (!r.values || !r.values.length) return `<span style="color:var(--text2)">${t.no_labs}</span>`;
-  const hdr = lang === 'zh'
-    ? '<tr><th>指标 / Test</th><th>数值 / Value</th><th>参考范围 / Reference</th><th>状态 / Status</th><th>解读 / Interpretation</th></tr>'
-    : '<tr><th>Test</th><th>Value</th><th>Reference Range</th><th>Status</th><th>Interpretation</th></tr>';
-  const rows = r.values.map(v => `<tr><td>${escHtml(v.name)}</td><td>${escHtml(String(v.value))} ${escHtml(v.unit)}</td><td style="color:var(--text2)">${escHtml(v.reference_range)}</td><td class="status-${v.status}">${t.status[v.status]||v.status}</td><td style="color:var(--text2);font-size:12px">${escHtml(v.interpretation)}</td></tr>`).join('');
-  return `<table class="lab-table">${hdr}${rows}</table><div style="margin-top:4px;font-size:11px;color:var(--text2)">${escHtml(r.summary||'')}</div>`;
+  if (!r.values || !r.values.length) return '<span style="color:var(--text2)">No lab values extracted.</span>';
+  const statusLabel = { normal:'✓ Normal', high:'↑ High', low:'↓ Low', critical_high:'⚠ CRIT↑', critical_low:'⚠ CRIT↓', abnormal:'⚠ Abnormal' };
+  const rows = r.values.map(v => `<tr><td>${escHtml(v.name)}</td><td>${escHtml(String(v.value))} ${escHtml(v.unit)}</td><td style="color:var(--text2)">${escHtml(v.reference_range)}</td><td class="status-${v.status}">${statusLabel[v.status]||v.status}</td><td style="color:var(--text2);font-size:12px">${escHtml(v.interpretation)}</td></tr>`).join('');
+  return `<table class="lab-table"><tr><th>Test</th><th>Value</th><th>Reference</th><th>Status</th><th>Interpretation</th></tr>${rows}</table>
+          <div style="margin-top:4px;font-size:11px;color:var(--text2)">${escHtml(r.summary||'')}</div>`;
 }
 
 function renderScores(r) {
-  const t = T[lang]; const cards = [];
+  const cards = [];
   if (r.child_pugh) {
-    const g = r.child_pugh.grade; const lbl = lang === 'zh' ? 'Child-Pugh' : 'Child-Pugh';
-    cards.push(`<div class="score-card"><div class="sc-label-cn">Child-Pugh</div><div class="sc-value grade-${g}">Grade ${g}</div><div class="sc-sub">Score ${r.child_pugh.total_score}/15</div><div class="sc-sub">${r.child_pugh.one_year_survival} ${lang==='zh'?'1年生存':'1-yr survival'}</div></div>`);
+    const g = r.child_pugh.grade;
+    cards.push(`<div class="score-card"><div class="sc-label">Child-Pugh</div><div class="sc-value grade-${g}">Grade ${g}</div><div class="sc-sub">Score ${r.child_pugh.total_score}/15</div><div class="sc-sub">${r.child_pugh.one_year_survival} 1-yr survival</div></div>`);
   }
   if (r.meld) {
     const s = r.meld.score; const col = s<10?'grade-A':s<20?'grade-B':'grade-C';
-    cards.push(`<div class="score-card"><div class="sc-label-cn">MELD</div><div class="sc-value ${col}">${s}</div><div class="sc-sub">${r.meld.category}</div><div class="sc-sub">${r.meld.three_month_mortality} ${lang==='zh'?'3月死亡率':'3-mo mortality'}</div></div>`);
+    cards.push(`<div class="score-card"><div class="sc-label">MELD</div><div class="sc-value ${col}">${s}</div><div class="sc-sub">${r.meld.category}</div><div class="sc-sub">${r.meld.three_month_mortality} 3-mo mortality</div></div>`);
   }
   if (r.albi) {
-    cards.push(`<div class="score-card"><div class="sc-label-cn">ALBI</div><div class="sc-value grade-${r.albi.grade}">Grade ${r.albi.grade}</div><div class="sc-sub">Score ${r.albi.score}</div></div>`);
+    cards.push(`<div class="score-card"><div class="sc-label">ALBI</div><div class="sc-value grade-${r.albi.grade}">Grade ${r.albi.grade}</div><div class="sc-sub">Score ${r.albi.score}</div></div>`);
   }
-  if (!cards.length) return `<span style="color:var(--text2)">${t.no_scores}. ${t.missing}: ${(r.missing_values||[]).join(', ')}</span>`;
+  if (!cards.length) return `<span style="color:var(--text2)">Insufficient data. Missing: ${(r.missing_values||[]).join(', ')}</span>`;
   return `<div class="score-grid">${cards.join('')}</div>`;
 }
 
 function renderUrgent(r) {
-  const t = T[lang];
-  if (!r.findings || !r.findings.length) return `<span style="color:var(--accent2)">${t.no_urgent}</span>`;
+  if (!r.findings || !r.findings.length) return '<span style="color:var(--accent2)">✓ No urgent or critical findings identified.</span>';
   return r.findings.map(f => `
     <div class="urgent-banner ${f.urgency_level}">
-      <div class="ub-title">${f.urgency_level==='CRITICAL'?'🚨':'⚠️'} ${escHtml(f.finding)}</div>
+      <div class="ub-title">${f.urgency_level==='CRITICAL'?'🚨':'⚠️'} [${f.urgency_level}] ${escHtml(f.finding)}</div>
       <div class="ub-action">→ ${escHtml(f.recommended_action)}</div>
       <div class="ub-time">⏱ ${escHtml(f.timeframe)}</div>
     </div>`).join('');
 }
 
 function renderDDx(r) {
-  const t = T[lang];
-  if (!r.differentials || !r.differentials.length) return `<span style="color:var(--text2)">${t.no_ddx}</span>`;
+  if (!r.differentials || !r.differentials.length) return '<span style="color:var(--text2)">Unable to generate differential.</span>';
+  const probLabel = {high:'High',moderate:'Moderate',low:'Low'};
   return r.differentials.map(d => `
     <div class="ddx-item">
       <div class="ddx-rank">${d.rank}</div>
@@ -604,7 +515,7 @@ function renderDDx(r) {
         <div class="ddx-name">${escHtml(d.condition)}</div>
         ${d.next_steps&&d.next_steps.length?`<div class="ddx-steps">${d.next_steps.slice(0,3).map(escHtml).join(' · ')}</div>`:''}
       </div>
-      <div class="ddx-prob prob-${d.probability}">${t.prob[d.probability]||d.probability}</div>
+      <div class="ddx-prob prob-${d.probability}">${probLabel[d.probability]||d.probability}</div>
     </div>`).join('');
 }
 
@@ -614,22 +525,329 @@ function renderFibrosis(r) {
   const idx = stageMap[r.stage] ?? 0;
   const segs = stages.map((s,i) => `<div class="fb-seg ${i<=Math.round(idx)?'active-'+stages[Math.min(Math.round(idx),4)]:''}"></div>`).join('');
   const evidence = (r.supporting_evidence||[]).map(e=>`<div style="font-size:12px;color:var(--text2);margin-bottom:3px">• ${escHtml(e)}</div>`).join('');
-  return `<div style="font-size:15px;font-weight:700;margin-bottom:6px">${escHtml(r.stage)} — ${escHtml(r.description)}</div><div class="fibrosis-bar">${segs}</div><div class="fb-labels"><span>F0</span><span>F1</span><span>F2</span><span>F3</span><span>F4</span></div><div style="margin-top:10px">${evidence}</div>`;
+  return `<div style="font-size:15px;font-weight:700;margin-bottom:6px">${escHtml(r.stage)} — ${escHtml(r.description)}</div>
+          <div class="fibrosis-bar">${segs}</div>
+          <div class="fb-labels"><span>F0</span><span>F1</span><span>F2</span><span>F3</span><span>F4</span></div>
+          <div style="margin-top:10px">${evidence}</div>`;
 }
 
 function renderTreatment(r) {
-  const t = T[lang];
-  const lines = (arr) => (arr||[]).slice(0,4).map(x=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text2)">• ${escHtml(x)}</div>`).join('');
+  const lines = (arr) => (arr||[]).slice(0,5).map(x=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text2)">• ${escHtml(x)}</div>`).join('');
   return `
-    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">${t.first_line}</div>
+    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">First-Line Treatment</div>
     ${lines(r.first_line_treatment)}
-    ${r.treatment_goals&&r.treatment_goals.length?`<div style="font-size:12px;font-weight:700;color:var(--accent2);margin:10px 0 6px">${t.goals}</div>${r.treatment_goals.slice(0,3).map(g=>`<div style="font-size:12px;color:var(--text2);padding:2px 0">✓ ${escHtml(g)}</div>`).join('')}`:''}
-    ${r.guideline_source?`<div style="font-size:11px;color:var(--text3);margin-top:8px;font-style:italic">${t.source}: ${escHtml(r.guideline_source)}</div>`:''}`;
+    ${r.treatment_goals&&r.treatment_goals.length?`
+      <div style="font-size:12px;font-weight:700;color:var(--accent2);margin:10px 0 5px">Treatment Goals</div>
+      ${r.treatment_goals.slice(0,3).map(g=>`<div style="font-size:12px;color:var(--text2);padding:2px 0">✓ ${escHtml(g)}</div>`).join('')}`:''}
+    ${r.guideline_source?`<div style="font-size:11px;color:var(--text3);margin-top:8px;font-style:italic">Source: ${escHtml(r.guideline_source)}</div>`:''}`;
 }
 
-function activateTool(name) { document.querySelectorAll('.tool-item').forEach(el => { if (el.dataset.tool === name) el.classList.add('active'); }); }
-function resetToolsUI() { document.querySelectorAll('.tool-item').forEach(el => el.classList.remove('active')); }
+function renderClinicalSummary(r) {
+  const section = (icon, label, items) => {
+    if (!items || !items.length) return '';
+    // Filter out unhelpful filler text
+    const filtered = items.filter(i => i && !i.match(/^see treatment guidelines$/i) && !i.match(/^as clinically indicated$/i));
+    if (!filtered.length) return '';
+    return `<div style="font-size:12px;font-weight:700;color:var(--accent);margin:10px 0 5px">${icon} ${label}</div>
+            ${filtered.map(i=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text2)">${escHtml(i)}</div>`).join('')}`;
+  };
+  const urgentHtml = (r.urgent_actions||[]).length ? `
+    <div style="background:rgba(220,38,38,.07);border-left:3px solid var(--danger);border-radius:6px;padding:8px 12px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--danger);margin-bottom:4px">🚨 Urgent Actions</div>
+      ${(r.urgent_actions||[]).map(a=>`<div style="font-size:12px;color:var(--danger);padding:2px 0">→ ${escHtml(a)}</div>`).join('')}
+    </div>` : '';
+  const assessHtml = r.assessment ? `
+    <div style="background:rgba(37,99,235,.06);border-radius:6px;padding:8px 12px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px">📋 Assessment</div>
+      <div style="font-size:13px;color:var(--text)">${renderMarkdown(r.assessment)}</div>
+    </div>` : '';
+  return `${urgentHtml}${assessHtml}
+    ${section('🔍','Key Findings', r.key_findings)}
+    ${section('💊','Management Plan', Array.isArray(r.plan) ? r.plan : (r.plan?[r.plan]:[]))}
+    ${section('📅','Follow-up', r.follow_up)}`;
+}
 
+function renderAdvancedScores(r) {
+  if (!r.scores || !Object.keys(r.scores).length) {
+    return `<span style="color:var(--text2)">Insufficient data to calculate scores.</span>
+            <div style="margin-top:6px;font-size:11px;color:var(--text3)">${(r.missing_data||[]).join('<br>')}</div>`;
+  }
+  const label = {fib4:'FIB-4',apri:'APRI',maddrey_df:'Maddrey DF',gahs:'GAHS',abic:'ABIC',lille:'Lille',meld_3:'MELD 3.0',page_b:'PAGE-B'};
+  const cards = Object.entries(r.scores).map(([name, sc]) => {
+    const val = sc.score !== undefined ? sc.score : '';
+    const risk = String(sc.risk || sc.interpretation || '').slice(0, 60);
+    const col = (risk.includes('High') || risk.includes('SEVERE') || risk.includes('NULL')) ? 'var(--danger)'
+              : (risk.includes('Low') || risk.includes('RESPOND')) ? 'var(--accent2)' : 'var(--warn)';
+    return `<div class="score-card"><div class="sc-label">${label[name]||name.toUpperCase()}</div>
+              <div class="sc-value" style="color:var(--accent)">${val}</div>
+              <div style="font-size:10px;color:${col};margin-top:2px;line-height:1.3">${escHtml(risk)}</div></div>`;
+  }).join('');
+  const missing = (r.missing_data||[]).length ? `<div style="font-size:11px;color:var(--text3);margin-top:8px">Missing: ${r.missing_data.join('; ')}</div>` : '';
+  return `<div class="score-grid">${cards}</div>${missing}`;
+}
+
+function renderImaging(r) {
+  const findings = r.findings || r.result || JSON.stringify(r);
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-size:10px;background:rgba(37,99,235,.1);color:var(--accent);padding:2px 8px;border-radius:4px;font-weight:600">GPT-4o · OpenAI Vision</span>
+      ${r.estimated_cost ? `<span style="font-size:10px;color:var(--text3)">Cost: ${escHtml(r.estimated_cost)}</span>` : ''}
+    </div>
+    <div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap">${escHtml(findings)}</div>`;
+}
+
+// ── Comprehensive Clinical Report ────────────────────────────────────────────
+function renderClinicalReport(r) {
+  const msgs = document.getElementById('messages');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'max-width:90%;margin-left:0;margin-bottom:20px';
+
+  // Helper: section block
+  const sec = (icon, title, color, content) => content ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:6px;display:flex;align-items:center;gap:6px;border-bottom:2px solid ${color}22;padding-bottom:4px">
+        ${icon} ${title}
+      </div>
+      ${content}
+    </div>` : '';
+
+  // Helper: list items
+  const list = (items, color) => (items||[]).map(i =>
+    `<div style="font-size:13px;color:var(--text);padding:4px 0 4px 8px;border-left:2px solid ${color}33">${escHtml(i)}</div>`
+  ).join('');
+
+  // ── 1. Urgent Findings ──
+  let urgentHtml = '';
+  if ((r.urgent_findings||[]).length) {
+    urgentHtml = (r.urgent_findings||[]).map(f => {
+      const col = f.level === 'CRITICAL' ? 'var(--danger)' : 'var(--warn)';
+      return `<div style="background:${f.level==='CRITICAL'?'rgba(220,38,38,.08)':'rgba(217,119,6,.06)'};border-left:4px solid ${col};border-radius:0 8px 8px 0;padding:8px 12px;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:${col}">${f.level==='CRITICAL'?'🚨':'⚠️'} [${f.level}] ${escHtml(f.finding)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">→ ${escHtml(f.action||'')} · ⏱ ${escHtml(f.timeframe||'')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── 2. Abnormal Values ──
+  const labHtml = (r.abnormal_values||[]).length
+    ? (r.abnormal_values||[]).map(v => {
+        const isHigh = v.includes('↑') || v.includes('CRIT') || v.toLowerCase().includes('elevated') || v.toLowerCase().includes('positive');
+        const col = v.toLowerCase().includes('crit') ? 'var(--danger)' : 'var(--warn)';
+        return `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="color:${col};font-weight:600;flex-shrink:0">${isHigh?'↑':'↓'}</span>
+          <span style="color:var(--text)">${escHtml(v)}</span>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--accent2)">✓ No significant abnormalities detected</div>';
+
+  // ── 3. Scores ──
+  const scoresHtml = (r.scores||[]).length
+    ? (r.scores||[]).map(s => `<div style="font-size:13px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">${escHtml(s)}</div>`).join('')
+    : '';
+
+  // ── 4. Diagnosis ──
+  const dxHtml = r.primary_diagnosis
+    ? `<div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:4px">${escHtml(r.primary_diagnosis)}</div>
+       ${(r.urgent_considerations||[]).map(u=>`<div style="font-size:12px;color:var(--danger);padding:2px 0">⚠️ ${escHtml(u)}</div>`).join('')}`
+    : '';
+
+  // ── 5. Differential Diagnosis ──
+  const ddxHtml = (r.differentials||[]).length
+    ? (r.differentials||[]).map(d => {
+        const probCol = {high:'var(--danger)',moderate:'var(--warn)',low:'var(--text3)'}[d.probability]||'var(--text2)';
+        const probTxt = {high:'High',moderate:'Moderate',low:'Low'}[d.probability]||d.probability;
+        return `<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text2);flex-shrink:0">${d.rank}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(d.condition||'')}</div>
+            ${(d.next_steps||[]).length?`<div style="font-size:11px;color:var(--text2);margin-top:2px">${d.next_steps.slice(0,3).map(escHtml).join(' · ')}</div>`:''}
+          </div>
+          <div style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;background:${probCol}18;color:${probCol};white-space:nowrap">${probTxt}</div>
+        </div>`;
+      }).join('')
+    : '';
+
+  // ── 6. Treatment ──
+  const txHtml = [
+    ...(r.treatment_first_line||[]).map(t=>`<div style="font-size:13px;color:var(--text);padding:4px 0 4px 8px;border-left:3px solid var(--accent)22;margin-bottom:2px">• ${escHtml(t)}</div>`),
+    (r.treatment_second_line||[]).length ? `<div style="font-size:11px;font-weight:600;color:var(--text2);margin:8px 0 4px">Second-Line / Alternatives:</div>` : '',
+    ...(r.treatment_second_line||[]).map(t=>`<div style="font-size:12px;color:var(--text2);padding:3px 0 3px 8px;border-left:2px solid var(--border)">• ${escHtml(t)}</div>`),
+    (r.treatment_goals||[]).length ? `<div style="font-size:11px;font-weight:600;color:var(--accent2);margin:8px 0 4px">Treatment Goals:</div>` : '',
+    ...(r.treatment_goals||[]).map(g=>`<div style="font-size:12px;color:var(--text2);padding:2px 0">✓ ${escHtml(g)}</div>`),
+    r.guideline_source ? `<div style="font-size:10px;color:var(--text3);margin-top:8px;font-style:italic">Source: ${escHtml(r.guideline_source)}</div>` : '',
+  ].filter(Boolean).join('');
+
+  // ── 7. Future Management ──
+  const mgmtHtml = [
+    ...(r.future_management||[]).map(m=>`<div style="font-size:13px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border)">→ ${escHtml(m)}</div>`),
+    ...(r.special_considerations||[]).map(s=>`<div style="font-size:12px;color:var(--text2);padding:3px 0;font-style:italic">• ${escHtml(s)}</div>`),
+  ].filter(Boolean).join('');
+
+  // ── Summary — strip code blocks and technical tool output ──
+  const cleanSummary = (r.summary||'')
+    .replace(/```[\s\S]*?```/g, '')   // remove code blocks
+    .replace(/pip install \S+/g, '')   // remove pip commands
+    .replace(/### (Missing Data|Additional Information)[\s\S]*/i, '') // cut off at technical sections
+    .trim();
+  const summaryHtml = cleanSummary
+    ? `<div style="font-size:13px;color:var(--text);line-height:1.7">${renderMarkdown(cleanSummary)}</div>`
+    : '';
+
+  wrap.innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.06)">
+      <div style="background:var(--accent);padding:12px 16px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">📋</span>
+        <span style="font-size:14px;font-weight:700;color:#fff">Clinical Report</span>
+      </div>
+      <div style="padding:16px">
+        ${urgentHtml ? `<div style="margin-bottom:14px">${urgentHtml}</div>` : ''}
+        ${sec('🧪','Abnormal Values','var(--warn)', labHtml)}
+        ${scoresHtml ? sec('📊','Clinical Scores','var(--accent)', scoresHtml) : ''}
+        ${dxHtml ? sec('🎯','Current Diagnosis','var(--accent)', dxHtml) : ''}
+        ${ddxHtml ? sec('🔍','Differential Diagnosis','var(--text2)', ddxHtml) : ''}
+        ${txHtml ? sec('💊','Treatment Plan','var(--accent2)', txHtml) : ''}
+        ${mgmtHtml ? sec('📅','Future Management','var(--accent)', mgmtHtml) : ''}
+        ${summaryHtml ? sec('📝','Summary','var(--text2)', summaryHtml) : ''}
+      </div>
+    </div>`;
+
+  msgs.appendChild(wrap);
+  scrollBottom();
+}
+
+// ── aMAP HCC Risk ────────────────────────────────────────────────────────────
+function renderAmap(r) {
+  if (r.error) return `<span style="color:var(--danger)">${escHtml(r.error)}</span>`;
+  const score = r.amap_score ?? '–';
+  const risk = r.risk_category || '';
+  const col = risk === 'High' ? 'var(--danger)' : risk === 'Medium' ? 'var(--warn)' : 'var(--accent2)';
+  return `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="text-align:center;background:var(--surface2);border-radius:10px;padding:10px 18px;border:2px solid ${col}">
+        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;margin-bottom:2px">aMAP Score</div>
+        <div style="font-size:32px;font-weight:800;color:${col}">${score}</div>
+        <div style="font-size:11px;font-weight:700;color:${col}">${escHtml(risk)} Risk</div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:3px">📅 Annual HCC risk: <strong style="color:${col}">${escHtml(r.annual_hcc_risk||'')}</strong></div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px">📊 5-year risk: <strong style="color:${col}">${escHtml(r.five_year_hcc_risk||'')}</strong></div>
+        <div style="background:rgba(37,99,235,.06);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text)">
+          <strong>Surveillance:</strong> ${escHtml(r.surveillance_recommendation||'')}
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic">${escHtml(r.source||'')} · ${escHtml(r.note||'')}</div>`;
+}
+
+// ── Baveno VII CSPH ───────────────────────────────────────────────────────────
+function renderBaveno(r) {
+  if (r.error) return `<span style="color:var(--danger)">${escHtml(r.error)}</span>`;
+  const status = r.csph_status || '';
+  const isOut  = status.includes('Ruled OUT');
+  const isIn   = status.includes('Confirmed');
+  const isGray = status.includes('Indeterminate') || status.includes('Gray');
+  const col    = isOut ? 'var(--accent2)' : isIn ? 'var(--danger)' : 'var(--warn)';
+  const icon   = isOut ? '✅' : isIn ? '⚠️' : '🔵';
+  const rationale = (r.rationale||[]).map(t=>`<div style="font-size:12px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">• ${escHtml(t)}</div>`).join('');
+  return `
+    <div style="border-left:4px solid ${col};border-radius:0 8px 8px 0;background:rgba(0,0,0,.03);padding:10px 14px;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:700;color:${col};margin-bottom:4px">${icon} ${escHtml(status)}</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:6px"><strong>EGD:</strong> ${escHtml(r.egd_recommendation||'')}</div>
+      ${r.nsbb_recommendation ? `<div style="font-size:12px;color:var(--text2)"><strong>NSBB:</strong> ${escHtml(r.nsbb_recommendation)}</div>` : ''}
+    </div>
+    ${rationale ? `<div style="margin-bottom:6px">${rationale}</div>` : ''}
+    <div style="font-size:11px;color:var(--text3);font-style:italic">${escHtml(r.source||'')}</div>`;
+}
+
+// ── MASLD Advanced Fibrosis ───────────────────────────────────────────────────
+function renderMasldFibrosis(r) {
+  if (r.error) return `<span style="color:var(--danger)">${escHtml(r.error)}</span>`;
+  const prob = r.probability_advanced_fibrosis || '–';
+  const risk = r.risk_category || '';
+  const col  = risk === 'High Risk' ? 'var(--danger)' : risk === 'Intermediate Risk' ? 'var(--warn)' : 'var(--accent2)';
+  return `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="text-align:center;background:var(--surface2);border-radius:10px;padding:10px 18px;border:2px solid ${col}">
+        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;margin-bottom:2px">F≥3 Probability</div>
+        <div style="font-size:30px;font-weight:800;color:${col}">${escHtml(prob)}</div>
+        <div style="font-size:11px;font-weight:700;color:${col}">${escHtml(risk)}</div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <div style="background:rgba(37,99,235,.06);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text);margin-bottom:6px">
+          <strong>Action:</strong> ${escHtml(r.action||'')}
+        </div>
+        <div style="font-size:12px;color:var(--text2)">${escHtml(r.recommendation||'')}</div>
+        ${r.fib4_score ? `<div style="font-size:12px;color:var(--text3);margin-top:4px">FIB-4: ${r.fib4_score}</div>` : ''}
+        ${r.indication_warning ? `<div style="font-size:11px;color:var(--warn);margin-top:4px">⚠️ ${escHtml(r.indication_warning)}</div>` : ''}
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);font-style:italic">${escHtml(r.source||'')} · ${escHtml(r.indication||'')}</div>`;
+}
+
+// ── Additional Clinical Scores (medcalc) ──────────────────────────────────────
+function renderAdditionalScores(r) {
+  if (r.error) return `<span style="color:var(--danger)">${escHtml(r.error)}</span>`;
+  const sc = r.scores || {};
+  let html = '';
+
+  if (sc.egfr_ckd_epi) {
+    const e = sc.egfr_ckd_epi;
+    const col = e.egfr_ml_min_1_73m2 >= 60 ? 'var(--accent2)' : e.egfr_ml_min_1_73m2 >= 30 ? 'var(--warn)' : 'var(--danger)';
+    html += `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${col}">
+      <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:4px">🧪 eGFR: ${e.egfr_ml_min_1_73m2} mL/min/1.73m²</div>
+      <div style="font-size:12px;color:var(--text);margin-bottom:3px">${escHtml(e.ckd_stage||'')}</div>
+      <div style="font-size:12px;color:var(--accent)">💊 ${escHtml(e.tdf_dose_adjustment||'')}</div>
+    </div>`;
+  }
+  if (sc.fib4_medcalc) {
+    const f = sc.fib4_medcalc;
+    const col = f.risk === 'High' ? 'var(--danger)' : f.risk === 'Indeterminate' ? 'var(--warn)' : 'var(--accent2)';
+    html += `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${col}">
+      <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:3px">📈 FIB-4 (medcalc): ${f.score} — <span style="color:${col}">${escHtml(f.risk||'')}</span></div>
+      <div style="font-size:11px;color:var(--text2)">${escHtml(f.note||'')}</div>
+    </div>`;
+  }
+  if (sc.has_bled) {
+    const h = sc.has_bled;
+    const col = h.score >= 3 ? 'var(--danger)' : h.score >= 2 ? 'var(--warn)' : 'var(--accent2)';
+    html += `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${col}">
+      <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:4px">🩸 HAS-BLED: ${h.score} — ${escHtml(h.annual_bleeding_risk||'')}</div>
+      <div style="font-size:12px;color:var(--text)">${escHtml(h.anticoagulation_recommendation||'')}</div>
+    </div>`;
+  }
+  if (sc.sofa) {
+    const s = sc.sofa;
+    const col = s.score >= 12 ? 'var(--danger)' : s.score >= 6 ? 'var(--warn)' : 'var(--accent2)';
+    html += `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${col}">
+      <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:4px">⚡ SOFA: ${s.score} — ICU mortality ${escHtml(s.icu_mortality_estimate||'')}</div>
+      <div style="font-size:11px;color:var(--text2)">${escHtml(s.aclf_relevance||'')}</div>
+    </div>`;
+  }
+
+  const missing = (r.missing_data||[]).filter(m=>m);
+  if (missing.length) html += `<div style="font-size:11px;color:var(--text3);margin-top:4px">Not calculated (missing data): ${missing.join(' · ')}</div>`;
+  return html || '<span style="color:var(--text2)">No scores calculated — provide more clinical parameters.</span>';
+}
+
+// ── Generic fallback — clean key-value display instead of raw JSON ────────────
+function renderGeneric(r) {
+  if (!r || typeof r !== 'object') return escHtml(String(r));
+  const skip = new Set(['error']);
+  const rows = Object.entries(r)
+    .filter(([k]) => !skip.has(k) && r[k] !== null && r[k] !== '' && !(Array.isArray(r[k]) && !r[k].length))
+    .map(([k, v]) => {
+      const label = k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+      const val = Array.isArray(v) ? v.join(' · ') : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px;font-weight:600;color:var(--accent);min-width:140px;flex-shrink:0">${escHtml(label)}</span>
+        <span style="font-size:12px;color:var(--text)">${escHtml(val.slice(0,300))}</span>
+      </div>`;
+    });
+  return rows.length ? rows.join('') : '<span style="color:var(--text2)">No data available.</span>';
+}
+
+function activateTool(name) { document.querySelectorAll('.tool-item').forEach(el => { if (el.dataset.tool===name) el.classList.add('active'); }); }
+function resetToolsUI() { document.querySelectorAll('.tool-item').forEach(el => el.classList.remove('active')); }
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function scrollBottom() { const el = document.getElementById('messages'); el.scrollTop = el.scrollHeight; }
 

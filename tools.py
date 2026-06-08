@@ -6,6 +6,13 @@ import re
 import json
 from typing import Any
 
+# medcalc: validated clinical calculators (pip install medcalc)
+try:
+    import medcalc.calculator as _mc
+    _MEDCALC = True
+except ImportError:
+    _MEDCALC = False
+
 from models import (
     LabValue, ParsedLabResults, ChildPughScore, MeldScore, AlbiScore,
     SeverityScores, Diagnosis, DifferentialDiagnosis, FibrosisAssessment,
@@ -222,43 +229,29 @@ def parse_lab_values(text: str) -> dict:
 
 def _child_pugh(bilirubin: float, albumin: float, inr: float,
                 ascites: int, encephalopathy: int) -> ChildPughScore:
-    """Compute Child-Pugh score (ascites: 0=none,1=mild,2=moderate/severe; encephalopathy: 0-4)."""
-    # Bilirubin (mg/dL) points
-    if bilirubin < 2:
-        bili_pts = 1
-    elif bilirubin <= 3:
-        bili_pts = 2
+    """Compute Child-Pugh score. Uses medcalc validated library when available."""
+    # Use medcalc validated formula if installed
+    if _MEDCALC:
+        ascites_map = {0: "none", 1: "mild", 2: "moderate"}
+        ascites_str = ascites_map.get(ascites, "none")
+        total = _mc.child_pugh_score(
+            bilirubin=bilirubin, albumin=albumin, inr=inr,
+            ascites=ascites_str, encephalopathy_grade=min(encephalopathy, 4)
+        )
+        # Reconstruct individual points (medcalc returns only total)
+        bili_pts   = 1 if bilirubin < 2 else (2 if bilirubin <= 3 else 3)
+        alb_pts    = 1 if albumin > 3.5 else (2 if albumin >= 2.8 else 3)
+        inr_pts    = 1 if inr < 1.7 else (2 if inr <= 2.3 else 3)
+        ascites_pts = min(ascites + 1, 3) if ascites >= 0 else 1
+        enc_pts    = 1 if encephalopathy == 0 else (2 if encephalopathy <= 2 else 3)
     else:
-        bili_pts = 3
-
-    # Albumin (g/dL) points
-    if albumin > 3.5:
-        alb_pts = 1
-    elif albumin >= 2.8:
-        alb_pts = 2
-    else:
-        alb_pts = 3
-
-    # INR points
-    if inr < 1.7:
-        inr_pts = 1
-    elif inr <= 2.3:
-        inr_pts = 2
-    else:
-        inr_pts = 3
-
-    # Ascites (0=none → 1pt, 1=mild → 2pts, 2=moderate/severe → 3pts)
-    ascites_pts = min(ascites + 1, 3) if ascites >= 0 else 1
-
-    # Encephalopathy (0=none → 1pt, 1-2=mild → 2pts, 3-4=severe → 3pts)
-    if encephalopathy == 0:
-        enc_pts = 1
-    elif encephalopathy <= 2:
-        enc_pts = 2
-    else:
-        enc_pts = 3
-
-    total = bili_pts + alb_pts + inr_pts + ascites_pts + enc_pts
+        # Fallback: hand-coded formula
+        bili_pts   = 1 if bilirubin < 2 else (2 if bilirubin <= 3 else 3)
+        alb_pts    = 1 if albumin > 3.5 else (2 if albumin >= 2.8 else 3)
+        inr_pts    = 1 if inr < 1.7 else (2 if inr <= 2.3 else 3)
+        ascites_pts = min(ascites + 1, 3) if ascites >= 0 else 1
+        enc_pts    = 1 if encephalopathy == 0 else (2 if encephalopathy <= 2 else 3)
+        total = bili_pts + alb_pts + inr_pts + ascites_pts + enc_pts
 
     if total <= 6:
         grade = "A"
@@ -291,15 +284,29 @@ def _child_pugh(bilirubin: float, albumin: float, inr: float,
     )
 
 
-def _meld(bilirubin: float, inr: float, creatinine: float) -> MeldScore:
-    """MELD score = 3.78×ln(bilirubin) + 11.2×ln(INR) + 9.57×ln(creatinine) + 6.43"""
-    bili = max(bilirubin, 1.0)
-    inr_v = max(inr, 1.0)
-    cr = max(min(creatinine, 4.0), 1.0)  # cap creatinine at 4.0
-
-    score = 3.78 * math.log(bili) + 11.2 * math.log(inr_v) + 9.57 * math.log(cr) + 6.43
-    score = round(score)
-    score = max(score, 6)
+def _meld(bilirubin: float, inr: float, creatinine: float,
+          sodium: float = 137, albumin: float = 3.5,
+          sex: str = "M", dialysis: bool = False) -> MeldScore:
+    """MELD 3.0 score (2022 UNOS standard). Uses medcalc validated library when available."""
+    if _MEDCALC:
+        score = _mc.meld_3(
+            age=50,  # age not used in MELD 3.0 formula but required by medcalc
+            female=(sex.upper() in ("F", "FEMALE")),
+            bilirubin=bilirubin,
+            inr=inr,
+            creatinine=creatinine,
+            albumin=albumin,
+            sodium=max(min(sodium, 137), 125),
+            dialysis=dialysis,
+        )
+        score = max(score, 6)
+    else:
+        # Fallback: classic MELD formula
+        bili = max(bilirubin, 1.0)
+        inr_v = max(inr, 1.0)
+        cr = max(min(creatinine, 4.0), 1.0)
+        score = round(3.78 * math.log(bili) + 11.2 * math.log(inr_v) + 9.57 * math.log(cr) + 6.43)
+        score = max(score, 6)
 
     if score < 10:
         category = "Low"
@@ -2320,6 +2327,488 @@ def calculate_advanced_scores(
     }
 
 
+# ─── Tool 9: Additional Validated Calculators (medcalc) ─────────────────────
+
+def calculate_additional_clinical_scores(
+    # eGFR (Hepatorenal syndrome, TDF dosing)
+    creatinine: float | None = None,
+    age: int | None = None,
+    sex: str = "M",
+    # SOFA score (ACLF)
+    pao2_fio2: float | None = None,
+    platelets_sofa: float | None = None,
+    bilirubin_sofa: float | None = None,
+    map_mmhg: float | None = None,
+    gcs_total: int | None = None,
+    creatinine_sofa: float | None = None,
+    urine_output_sofa: float | None = None,
+    vasopressor: str = "none",
+    # HAS-BLED (bleeding risk for anticoagulation — Budd-Chiari, PVT)
+    hypertension: bool = False,
+    renal_disease: bool = False,
+    liver_disease_hasbled: bool = False,
+    stroke_history: bool = False,
+    prior_bleeding: bool = False,
+    labile_inr: bool = False,
+    elderly_hasbled: bool = False,
+    antiplatelet: bool = False,
+    alcohol_hasbled: bool = False,
+    # FIB-4 (use medcalc validated)
+    ast: float | None = None,
+    alt: float | None = None,
+    platelets_fib4: float | None = None,
+) -> dict:
+    """Calculate additional validated clinical scores using medcalc library.
+    Includes: eGFR (CKD-EPI), SOFA score, HAS-BLED, FIB-4 (medcalc validated).
+    """
+    if not _MEDCALC:
+        return {"error": "medcalc library not installed. Run: pip install medcalc"}
+
+    results = {}
+    missing = []
+
+    # ── eGFR (CKD-EPI) — for HRS staging, TDF/ETV dose adjustment ────────────
+    if creatinine is not None and age is not None:
+        try:
+            egfr = _mc.egfr_epi(
+                scr=creatinine,
+                age=age,
+                male=(str(sex).upper() not in ("F","FEMALE")),
+            )
+            if egfr >= 90:
+                ckd = "G1 — Normal or high (≥90)"
+                tdf_dose = "TDF: standard 300 mg/day"
+            elif egfr >= 60:
+                ckd = "G2 — Mildly decreased (60–89)"
+                tdf_dose = "TDF: standard 300 mg/day"
+            elif egfr >= 30:
+                ckd = "G3 — Moderately decreased (30–59)"
+                tdf_dose = "TDF: 300 mg every 48h OR switch to TAF 25 mg/day"
+            elif egfr >= 15:
+                ckd = "G4 — Severely decreased (15–29)"
+                tdf_dose = "TDF: 300 mg every 72–96h OR TAF 25 mg/day (preferred)"
+            else:
+                ckd = "G5 — Kidney failure (<15)"
+                tdf_dose = "TAF 25 mg/day (TDF contraindicated). Entecavir dose adjust."
+            results["egfr_ckd_epi"] = {
+                "egfr_ml_min_1_73m2": round(egfr, 1),
+                "ckd_stage": ckd,
+                "tdf_dose_adjustment": tdf_dose,
+                "clinical_note": "eGFR required for HRS-AKI staging and antiviral dose adjustment",
+            }
+        except Exception as e:
+            missing.append(f"eGFR: {e}")
+    else:
+        missing.append("eGFR: requires creatinine + age")
+
+    # ── FIB-4 (medcalc validated version) ─────────────────────────────────────
+    if all(v is not None for v in [age, ast, alt, platelets_fib4]) and platelets_fib4 > 0 and alt > 0:
+        try:
+            fib4 = _mc.fib4_index(age=age, ast=ast, alt=alt, platelets=platelets_fib4)
+            fib4 = round(fib4, 2)
+            if age >= 65:
+                cutoff_low, cutoff_high = 2.0, 2.67
+                note = "Age-adjusted: low risk cutoff raised to 2.0 for age ≥65"
+            else:
+                cutoff_low, cutoff_high = 1.3, 2.67
+                note = "Standard cutoffs: <1.3 low, 1.3–2.67 indeterminate, >2.67 high"
+            risk = "Low" if fib4 < cutoff_low else ("Indeterminate" if fib4 <= cutoff_high else "High")
+            results["fib4_medcalc"] = {
+                "score": fib4,
+                "risk": risk,
+                "note": note,
+                "source": "medcalc validated formula",
+            }
+        except Exception as e:
+            missing.append(f"FIB-4: {e}")
+    else:
+        missing.append("FIB-4: requires age, AST, ALT, platelets")
+
+    # ── HAS-BLED (bleeding risk for anticoagulation decisions) ─────────────────
+    # Relevant when anticoagulating Budd-Chiari / PVT / AF in cirrhosis
+    try:
+        hasbled_score = sum([
+            hypertension, renal_disease, liver_disease_hasbled, stroke_history,
+            prior_bleeding, labile_inr, elderly_hasbled, antiplatelet, alcohol_hasbled
+        ])
+        if hasbled_score <= 2:
+            bleed_risk = "Low (≤2%/year)"
+            anticoag_rec = "Anticoagulation generally appropriate with monitoring"
+        elif hasbled_score == 3:
+            bleed_risk = "Moderate (~3.7%/year)"
+            anticoag_rec = "Use caution; consider reversible risk factors; monitor closely"
+        else:
+            bleed_risk = "High (>8%/year)"
+            anticoag_rec = "High bleeding risk — weigh against thrombosis risk; treat reversible factors first"
+        results["has_bled"] = {
+            "score": hasbled_score,
+            "annual_bleeding_risk": bleed_risk,
+            "anticoagulation_recommendation": anticoag_rec,
+            "note": "For cirrhosis-associated anticoagulation (Budd-Chiari, PVT). Score ≥3 = high risk.",
+        }
+    except Exception as e:
+        missing.append(f"HAS-BLED: {e}")
+
+    # ── SOFA score (for ACLF severity assessment) ──────────────────────────────
+    if all(v is not None for v in [platelets_sofa, bilirubin_sofa, map_mmhg, gcs_total, creatinine_sofa]):
+        try:
+            sofa = _mc.sofa_score(
+                pao2_fio2=pao2_fio2 or 400,
+                platelets=platelets_sofa,
+                bilirubin=bilirubin_sofa,
+                map=map_mmhg,
+                gcs=gcs_total,
+                creatinine=creatinine_sofa,
+                urine_output=urine_output_sofa or 500,
+                vasopressor=vasopressor,
+            )
+            if sofa < 6:
+                mortality = "<10%"
+            elif sofa < 9:
+                mortality = "15–20%"
+            elif sofa < 12:
+                mortality = "40–50%"
+            else:
+                mortality = ">80%"
+            results["sofa"] = {
+                "score": sofa,
+                "icu_mortality_estimate": mortality,
+                "aclf_relevance": "SOFA ≥2 defines organ failure in EASL-CLIF ACLF criteria",
+                "note": "Use CLIF-C OF (modified SOFA) for formal ACLF grading",
+            }
+        except Exception as e:
+            missing.append(f"SOFA: {e}")
+    else:
+        missing.append("SOFA: requires platelets, bilirubin, MAP, GCS, creatinine")
+
+    return {
+        "scores": results,
+        "missing_data": missing,
+        "calculator_source": "medcalc library (pip install medcalc)",
+    }
+
+
+# ─── Tool 9 (original): Advanced Fibrosis Calculator (MASLD) ───────────────────────────
+# Source: github.com/laithomari/advanced_fibrosis_calculator
+# Model: L2-regularized logistic regression, trained on 1,581 biopsy-confirmed patients
+# Validated: Internal AUROC 0.826, Asian cohort 0.737, NHANES 0.743
+# Indication: MASLD/NAFLD patients with INDETERMINATE FIB-4 (1.3–2.67)
+
+_AFC_MODEL = {
+    "intercept": -1.2938195574226066,
+    "features": ["age", "bmi", "ast_log", "alt_log", "ggt_log", "platelets", "diabetes", "ast_alt_ratio"],
+    "coefficients": {
+        "age":          0.47812706715595105,
+        "bmi":          0.3785487071652713,
+        "ast_log":      1.9170632746913627,
+        "alt_log":     -1.7219456328868705,
+        "ggt_log":      0.46040728958803795,
+        "platelets":   -0.6822389111254026,
+        "diabetes":     0.3331626014517234,
+        "ast_alt_ratio":-0.4753960846614913,
+    },
+    "scaler_means": {
+        "age":          49.951296647691336,
+        "bmi":          34.46683744465528,
+        "ast_log":      3.6748166929600568,
+        "alt_log":      3.924569614865929,
+        "ggt_log":      3.865424548612931,
+        "platelets":    238320.05060088553,
+        "diabetes":     0.33649588867805186,
+        "ast_alt_ratio":0.8332148103668242,
+    },
+    "scaler_stds": {
+        "age":          12.529465583430557,
+        "bmi":          6.742973909605373,
+        "ast_log":      0.5294716136649897,
+        "alt_log":      0.627102084646885,
+        "ggt_log":      0.7696293820814604,
+        "platelets":    75728.73479814474,
+        "diabetes":     0.4725107465241611,
+        "ast_alt_ratio":0.35912402258659876,
+    },
+    "thresholds": {"rule_out": 0.2561, "youden": 0.3295, "rule_in": 0.5922},
+}
+
+
+# ─── Tool 10: aMAP Score (HCC Risk, All Etiologies) ─────────────────────────
+# Fan et al., J Hepatol 2020;73:1368-1378. PMID: 32097765
+# Validated across HBV, HCV, NAFLD, ALD — unlike PAGE-B (HBV only)
+# Score 0-100: <50 = Low, 50-60 = Medium, ≥60 = High annual HCC risk
+
+def calculate_amap_hcc_risk(
+    age: int,
+    ast: float | None = None,
+    alt: float | None = None,
+    afp: float = 5.0,            # AFP in ng/mL (default normal)
+    albumin: float = 4.0,        # Albumin in g/dL
+    platelets: float = 200.0,    # Platelets ×10³/μL
+    bilirubin: float = 1.0,      # Total bilirubin in mg/dL
+    sex: str = "M",
+) -> dict:
+    """Calculate aMAP score for HCC annual risk in cirrhotic patients.
+    Works for ALL cirrhosis etiologies (HBV, HCV, NAFLD, ALD).
+    Source: Fan et al., J Hepatol 2020;73:1368-1378 (aMAP score)
+    """
+    sex_m = 1 if str(sex).upper() in ("M", "MALE") else 0
+    albumin_gl = albumin * 10  # g/dL → g/L
+
+    lp = (0.0249 * age
+          + 0.0647 * sex_m
+          + 0.330 * math.log10(max(afp, 0) + 1)
+          - 0.0216 * albumin_gl
+          - 0.0148 * platelets
+          + 0.273 * bilirubin)
+
+    # Calibrated mapping to 0-100 scale (×12 + 54)
+    score = max(0, min(100, round(lp * 12 + 54)))
+
+    if score < 50:
+        risk = "Low"
+        annual_risk = "~0.4%/year"
+        five_yr = "~2%"
+        surveillance = "Ultrasound + AFP every 6–12 months"
+        color = "green"
+    elif score < 60:
+        risk = "Medium"
+        annual_risk = "~3.3%/year"
+        five_yr = "~15%"
+        surveillance = "Ultrasound + AFP every 6 months. Consider contrast-enhanced CT/MRI annually."
+        color = "orange"
+    else:
+        risk = "High"
+        annual_risk = "~18%/year"
+        five_yr = "~60%"
+        surveillance = "Ultrasound + AFP every 3–6 months. Annual contrast-enhanced CT or MRI. MDT review."
+        color = "red"
+
+    return {
+        "amap_score": score,
+        "risk_category": risk,
+        "annual_hcc_risk": annual_risk,
+        "five_year_hcc_risk": five_yr,
+        "surveillance_recommendation": surveillance,
+        "inputs": {
+            "age": age, "sex": "Male" if sex_m else "Female",
+            "afp_ngml": afp, "albumin_gdl": albumin,
+            "platelets_k": platelets, "bilirubin_mgdl": bilirubin,
+        },
+        "note": "aMAP validated for HBV/HCV/NAFLD/ALD cirrhotics. Requires pre-existing cirrhosis/advanced fibrosis.",
+        "source": "Fan R, et al. J Hepatol 2020;73:1368-1378. PMID: 32097765",
+        "comparison_to_page_b": "PAGE-B (HBV only, on antiviral therapy) — use aMAP for non-HBV or combined etiologies.",
+    }
+
+
+# ─── Tool 11: Baveno VII CSPH Criteria ──────────────────────────────────────
+# de Franchis R et al. (Baveno VII faculty). J Hepatol 2022;76:959-974
+# Rule-out CSPH to avoid EGD for variceal screening
+
+def assess_baveno_csph(
+    lsm_kpa: float | None = None,          # Liver Stiffness Measurement (Fibroscan, kPa)
+    platelets: float | None = None,         # Platelets ×10³/μL
+    ssm_kpa: float | None = None,           # Spleen Stiffness Measurement (kPa, optional)
+    viral_suppression: bool = False,        # HCV SVR or HBV viral suppression achieved
+    clinical_context: str = "",
+) -> dict:
+    """Evaluate Baveno VII criteria for Clinically Significant Portal Hypertension (CSPH).
+    Determines whether EGD for variceal screening can be safely avoided.
+    Source: Baveno VII Consensus, J Hepatol 2022;76:959-974
+    """
+    result = {
+        "lsm_kpa": lsm_kpa,
+        "platelets_k": platelets,
+        "ssm_kpa": ssm_kpa,
+        "viral_suppression": viral_suppression,
+        "csph_status": None,
+        "egd_recommendation": None,
+        "nsbb_recommendation": None,
+        "rationale": [],
+        "source": "Baveno VII Consensus Workshop, de Franchis R et al. J Hepatol 2022;76:959-974",
+    }
+
+    if lsm_kpa is None:
+        result["csph_status"] = "Insufficient data"
+        result["egd_recommendation"] = "LSM (Fibroscan) required for Baveno VII assessment"
+        result["rationale"] = ["LSM not provided — cannot apply Baveno VII criteria"]
+        return result
+
+    rationale = []
+
+    # ── Rule OUT CSPH (skip EGD) ──────────────────────────────────────────────
+    # Standard (untreated / any etiology)
+    if lsm_kpa < 15 and platelets is not None and platelets > 150:
+        result["csph_status"] = "CSPH Ruled OUT"
+        result["egd_recommendation"] = "EGD NOT required — Baveno VII rule-out criteria met"
+        result["nsbb_recommendation"] = "NSBB not indicated (no CSPH)"
+        rationale.append(f"LSM {lsm_kpa} kPa < 15 kPa AND Platelets {platelets}k > 150k → CSPH excluded")
+        rationale.append("Risk of missing high-risk varices: <5% (Baveno VII validation)")
+        result["rationale"] = rationale
+        return result
+
+    # Viral suppression (lower LSM threshold): HCV SVR or HBV on antiviral with suppression
+    if viral_suppression and lsm_kpa < 12 and platelets is not None and platelets > 150:
+        result["csph_status"] = "CSPH Ruled OUT (viral suppression criteria)"
+        result["egd_recommendation"] = "EGD NOT required — lower threshold applies with viral suppression"
+        result["nsbb_recommendation"] = "NSBB not indicated"
+        rationale.append(f"Viral suppression + LSM {lsm_kpa} kPa < 12 kPa + Platelets {platelets}k > 150k")
+        rationale.append("HCV SVR or HBV suppression lowers LSM threshold for CSPH rule-out")
+        result["rationale"] = rationale
+        return result
+
+    # Very low LSM regardless of platelets
+    if lsm_kpa < 10:
+        result["csph_status"] = "CSPH Very Unlikely"
+        result["egd_recommendation"] = "EGD likely not required — LSM < 10 kPa"
+        result["nsbb_recommendation"] = "NSBB not indicated"
+        rationale.append(f"LSM {lsm_kpa} kPa < 10 kPa — cACLD (compensated advanced CLD) unlikely")
+        result["rationale"] = rationale
+        return result
+
+    # ── Rule IN CSPH (EGD definitely needed) ──────────────────────────────────
+    csph_confirmed = False
+    if lsm_kpa >= 25:
+        csph_confirmed = True
+        rationale.append(f"LSM {lsm_kpa} kPa ≥ 25 kPa → CSPH confirmed (rule-in threshold)")
+    elif lsm_kpa >= 20 and platelets is not None and platelets < 150:
+        csph_confirmed = True
+        rationale.append(f"LSM {lsm_kpa} kPa ≥ 20 kPa AND Platelets {platelets}k < 150k → CSPH likely")
+    if ssm_kpa is not None and ssm_kpa >= 21:
+        csph_confirmed = True
+        rationale.append(f"Spleen stiffness {ssm_kpa} kPa ≥ 21 kPa → CSPH confirmed regardless of LSM")
+
+    if csph_confirmed:
+        result["csph_status"] = "CSPH Confirmed"
+        result["egd_recommendation"] = (
+            "EGD REQUIRED for variceal screening. "
+            "If high-risk varices found: start carvedilol 6.25 mg/day or propranolol 20 mg BID, "
+            "OR endoscopic band ligation (EBL)."
+        )
+        result["nsbb_recommendation"] = (
+            "Consider starting NSBB prophylaxis: "
+            "Carvedilol 6.25 mg/day (preferred, Baveno VII) OR Propranolol 20 mg BID "
+            "→ titrate to HR 55–60 bpm"
+        )
+        result["rationale"] = rationale
+        return result
+
+    # ── Gray zone ─────────────────────────────────────────────────────────────
+    result["csph_status"] = "Indeterminate (Gray Zone)"
+    if lsm_kpa < 15:
+        rationale.append(f"LSM {lsm_kpa} kPa < 15 kPa but Platelets {'not provided' if platelets is None else f'{platelets}k ≤ 150k'} → cannot rule out CSPH")
+    else:
+        rationale.append(f"LSM {lsm_kpa} kPa in 15–25 kPa range — neither rule-out nor rule-in")
+
+    result["egd_recommendation"] = (
+        "EGD RECOMMENDED — criteria for safe omission not met. "
+        "Consider HVPG measurement (gold standard) or additional non-invasive tests."
+    )
+    result["nsbb_recommendation"] = "Individualized decision — await EGD results before starting NSBB"
+
+    # Additional guidance for gray zone
+    if ssm_kpa is not None:
+        if ssm_kpa < 40:
+            rationale.append(f"Spleen stiffness {ssm_kpa} kPa < 40 kPa — may help rule out high-risk varices")
+        else:
+            rationale.append(f"Spleen stiffness {ssm_kpa} kPa ≥ 40 kPa — high-risk varices likely")
+
+    rationale.append("Baveno VII gray zone: HVPG 10-15 mmHg most likely; EGD to confirm variceal status")
+    result["rationale"] = rationale
+    return result
+
+
+def predict_masld_advanced_fibrosis(
+    age: int,
+    ast: float,
+    alt: float,
+    platelets: float,          # ×10³/μL  e.g. 185
+    bmi: float | None = None,
+    ggt: float | None = None,
+    diabetes: int = 0,         # 1 = Yes, 0 = No
+) -> dict:
+    """Predict advanced fibrosis (F≥3) risk in MASLD patients with
+    indeterminate FIB-4 (1.3–2.67).
+    Source: github.com/laithomari/advanced_fibrosis_calculator
+    """
+    import math
+
+    # Validate indication: compute FIB-4 first
+    fib4 = None
+    if alt and alt > 0 and platelets and platelets > 0:
+        fib4 = (age * ast) / (platelets * math.sqrt(alt))
+
+    indication_warning = None
+    if fib4 is not None:
+        if fib4 < 1.3:
+            indication_warning = f"FIB-4 {round(fib4,2)} < 1.3 (low risk zone). This calculator is validated for FIB-4 1.3–2.67 only."
+        elif fib4 > 2.67:
+            indication_warning = f"FIB-4 {round(fib4,2)} > 2.67 (high risk zone). This calculator is validated for FIB-4 1.3–2.67 only."
+
+    # Impute missing values with training means (fallback)
+    means = _AFC_MODEL["scaler_means"]
+    bmi_val     = bmi if bmi is not None else means["bmi"]
+    ggt_val     = ggt if ggt is not None else math.exp(means["ggt_log"]) - 1
+    platelets_v = platelets * 1000 if platelets < 500 else platelets  # harmonise to /μL
+
+    # Derived features
+    ast_log      = math.log1p(ast)
+    alt_log      = math.log1p(alt)
+    ggt_log      = math.log1p(ggt_val)
+    ast_alt_r    = ast / alt if alt > 0 else means["ast_alt_ratio"]
+
+    feature_vals = {
+        "age": age, "bmi": bmi_val, "ast_log": ast_log,
+        "alt_log": alt_log, "ggt_log": ggt_log,
+        "platelets": platelets_v, "diabetes": diabetes,
+        "ast_alt_ratio": ast_alt_r,
+    }
+
+    # Standardise + compute logit
+    logit = _AFC_MODEL["intercept"]
+    for feat in _AFC_MODEL["features"]:
+        z = (feature_vals[feat] - _AFC_MODEL["scaler_means"][feat]) / _AFC_MODEL["scaler_stds"][feat]
+        logit += _AFC_MODEL["coefficients"][feat] * z
+
+    prob = 1 / (1 + math.exp(-logit))
+    prob_pct = round(prob * 100, 1)
+
+    th = _AFC_MODEL["thresholds"]
+    if prob < th["rule_out"]:
+        risk_category = "Low Risk"
+        recommendation = "Advanced fibrosis (F≥3) unlikely. Monitor in primary care; reassess FIB-4 in 1–2 years."
+        action = "Routine monitoring"
+    elif prob >= th["rule_in"]:
+        risk_category = "High Risk"
+        recommendation = "High probability of advanced fibrosis. Refer to hepatologist. Consider Fibroscan/liver biopsy."
+        action = "Hepatology referral + confirmatory testing"
+    else:
+        risk_category = "Intermediate Risk"
+        recommendation = "Indeterminate result. Consider second-line testing: Fibroscan (LSM), ELF score, or liver biopsy."
+        action = "Second-line fibrosis testing (Fibroscan/VCTE recommended)"
+
+    result = {
+        "probability_advanced_fibrosis": f"{prob_pct}%",
+        "probability_raw": round(prob, 4),
+        "risk_category": risk_category,
+        "recommendation": recommendation,
+        "action": action,
+        "fib4_score": round(fib4, 2) if fib4 else None,
+        "inputs_used": {
+            "age": age, "ast": ast, "alt": alt,
+            "platelets_per_ul": platelets_v,
+            "bmi": round(bmi_val, 1),
+            "ggt": round(ggt_val, 1),
+            "diabetes": "Yes" if diabetes else "No",
+            "ast_alt_ratio": round(ast_alt_r, 2),
+        },
+        "thresholds": {"rule_out": f"<{th['rule_out']*100:.1f}%", "rule_in": f"≥{th['rule_in']*100:.1f}%"},
+        "model_info": "L2-regularized logistic regression | 1,581 biopsy-confirmed MASLD patients | AUROC 0.826",
+        "source": "Laithomari et al. github.com/laithomari/advanced_fibrosis_calculator | MIT License",
+        "indication": "MASLD/NAFLD patients with indeterminate FIB-4 (1.3–2.67)",
+        "indication_warning": indication_warning,
+    }
+    return result
+
+
 # ─── Tool Registry ────────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -2510,6 +2999,113 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "calculate_additional_clinical_scores",
+        "description": (
+            "Calculate additional validated clinical scores using the medcalc library. "
+            "Includes: (1) eGFR CKD-EPI with TDF/antiviral dose adjustment recommendations — "
+            "critical for hepatorenal syndrome staging and safe antiviral dosing; "
+            "(2) FIB-4 index (medcalc validated version with age-adjusted cutoffs); "
+            "(3) HAS-BLED score for bleeding risk when anticoagulation is being considered "
+            "(Budd-Chiari, portal vein thrombosis, AF in cirrhosis); "
+            "(4) SOFA score for ICU/ACLF severity. "
+            "Call this when renal function, anticoagulation decision, or ICU severity assessment is needed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "creatinine":   {"type": "number",  "description": "Creatinine mg/dL (for eGFR)"},
+                "age":          {"type": "integer", "description": "Age in years"},
+                "sex":          {"type": "string",  "description": "Sex: M or F"},
+                "ast":          {"type": "number",  "description": "AST U/L (for FIB-4)"},
+                "alt":          {"type": "number",  "description": "ALT U/L (for FIB-4)"},
+                "platelets_fib4": {"type": "number", "description": "Platelets ×10³/μL (for FIB-4)"},
+                "hypertension": {"type": "boolean", "description": "Hypertension (for HAS-BLED)"},
+                "renal_disease":{"type": "boolean", "description": "Renal disease (for HAS-BLED)"},
+                "liver_disease_hasbled": {"type": "boolean", "description": "Liver disease (for HAS-BLED)"},
+                "prior_bleeding":{"type": "boolean", "description": "Prior bleeding history (for HAS-BLED)"},
+                "stroke_history":{"type": "boolean", "description": "Stroke history (for HAS-BLED)"},
+                "elderly_hasbled":{"type": "boolean", "description": "Age >65 (for HAS-BLED)"},
+                "antiplatelet": {"type": "boolean", "description": "Antiplatelet use (for HAS-BLED)"},
+                "alcohol_hasbled":{"type": "boolean","description": "Alcohol use ≥8 drinks/week (for HAS-BLED)"},
+            },
+        },
+    },
+    {
+        "name": "calculate_amap_hcc_risk",
+        "description": (
+            "Calculate aMAP score for annual HCC risk in cirrhotic patients. "
+            "UNLIKE PAGE-B (HBV only), aMAP works for ALL cirrhosis etiologies: HBV, HCV, NAFLD, ALD. "
+            "Requires confirmed cirrhosis or advanced fibrosis. "
+            "Inputs: age, sex, AFP, albumin, platelets, bilirubin. "
+            "Outputs: aMAP score 0-100, risk category (Low/Medium/High), "
+            "annual HCC incidence estimate, and HCC surveillance frequency recommendation. "
+            "Low (<50): ~0.4%/year. Medium (50-60): ~3.3%/year. High (≥60): ~18%/year. "
+            "Source: Fan et al., J Hepatol 2020;73:1368-1378."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "age":       {"type": "integer", "description": "Age in years"},
+                "sex":       {"type": "string",  "description": "Sex: 'M' or 'F'"},
+                "afp":       {"type": "number",  "description": "AFP in ng/mL (default 5 if unknown)"},
+                "albumin":   {"type": "number",  "description": "Albumin in g/dL"},
+                "platelets": {"type": "number",  "description": "Platelets ×10³/μL"},
+                "bilirubin": {"type": "number",  "description": "Total bilirubin in mg/dL"},
+            },
+            "required": ["age"],
+        },
+    },
+    {
+        "name": "assess_baveno_csph",
+        "description": (
+            "Apply Baveno VII criteria to assess Clinically Significant Portal Hypertension (CSPH) "
+            "and determine whether EGD (endoscopy) for variceal screening can be safely avoided. "
+            "Key criteria: LSM < 15 kPa AND Platelets > 150k → CSPH ruled out → skip EGD. "
+            "LSM ≥ 25 kPa → CSPH confirmed → EGD required. "
+            "Lower threshold (LSM < 12 kPa) applies for patients with viral suppression (HCV SVR or HBV). "
+            "Also provides NSBB prophylaxis recommendations. "
+            "Call this whenever a patient has Fibroscan (LSM) results and cirrhosis is suspected. "
+            "Source: Baveno VII Consensus, de Franchis R et al. J Hepatol 2022;76:959-974."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lsm_kpa":            {"type": "number",  "description": "Liver stiffness (Fibroscan LSE) in kPa"},
+                "platelets":          {"type": "number",  "description": "Platelets ×10³/μL"},
+                "ssm_kpa":            {"type": "number",  "description": "Spleen stiffness in kPa (optional, if available)"},
+                "viral_suppression":  {"type": "boolean", "description": "True if HCV SVR achieved or HBV virally suppressed on treatment"},
+                "clinical_context":   {"type": "string",  "description": "Brief clinical context (optional)"},
+            },
+            "required": ["lsm_kpa"],
+        },
+    },
+    {
+        "name": "predict_masld_advanced_fibrosis",
+        "description": (
+            "Predict advanced fibrosis (F≥3) probability in MASLD/NAFLD patients using a validated "
+            "L2-regularized logistic regression model (AUROC 0.826). "
+            "IMPORTANT: This tool is specifically for patients with INDETERMINATE FIB-4 scores (1.3–2.67) "
+            "where standard FIB-4 alone is insufficient. "
+            "Inputs: age, AST, ALT, platelets. Optional: BMI, GGT, diabetes status. "
+            "Outputs: probability of advanced fibrosis, risk category (Low/Intermediate/High), "
+            "and specific clinical recommendation. "
+            "Source: github.com/laithomari/advanced_fibrosis_calculator (MIT License, validated on 1,581 biopsies)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "age":      {"type": "integer", "description": "Patient age in years"},
+                "ast":      {"type": "number",  "description": "AST in U/L"},
+                "alt":      {"type": "number",  "description": "ALT in U/L"},
+                "platelets":{"type": "number",  "description": "Platelet count ×10³/μL (e.g. 185)"},
+                "bmi":      {"type": "number",  "description": "BMI in kg/m² (optional; uses cohort mean if missing)"},
+                "ggt":      {"type": "number",  "description": "GGT in U/L (optional)"},
+                "diabetes": {"type": "integer", "description": "Diabetes: 1=Yes, 0=No", "enum": [0, 1]},
+            },
+            "required": ["age", "ast", "alt", "platelets"],
+        },
+    },
 ]
 
 
@@ -2524,6 +3120,10 @@ def execute_tool(tool_name: str, tool_input: dict) -> Any:
         "generate_clinical_summary": lambda i: generate_clinical_summary(**i),
         "flag_urgent_findings": lambda i: flag_urgent_findings(**i),
         "calculate_advanced_scores": lambda i: calculate_advanced_scores(**i),
+        "calculate_additional_clinical_scores": lambda i: calculate_additional_clinical_scores(**i),
+        "calculate_amap_hcc_risk": lambda i: calculate_amap_hcc_risk(**i),
+        "assess_baveno_csph": lambda i: assess_baveno_csph(**i),
+        "predict_masld_advanced_fibrosis": lambda i: predict_masld_advanced_fibrosis(**i),
     }
     fn = tool_map.get(tool_name)
     if fn is None:
